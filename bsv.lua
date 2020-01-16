@@ -1,24 +1,102 @@
+--dbg = require('debug')
+
 bsv_protocol = Proto("BSV",  "Bitcoin SV Protocol")
 
-bsv_protocol.fields = {}
+local fields = {}
+fields.magic = ProtoField.uint32("bsv.header.magic", "Magic", base.HEX)
+fields.cmd = ProtoField.string("bsv.header.cmd", "Command")
+fields.length = ProtoField.uint32("bsv.header.length", "Length")
+fields.checksum = ProtoField.uint32("bsv.header.checksum", "Checksum")
+fields.inv_count = ProtoField.uint8("bsv.inv.count", "Count")
 
-function bsv_protocol.dissector(buffer, pinfo, tree)
-    assert(false)
-  length = buffer:len()
-  if length == 0 then return end
 
-  pinfo.cols.protocol = bsv_protocol.name
+bsv_protocol.fields = fields 
 
-  local subtree = tree:add(bsv_protocol, buffer(), "Bitcoin SV Protocol Data")
+function get_msg_length(tvb)
+    local len = tvb:le_uint()
+    --debug('length ' .. len)
+    return len 
 end
 
---local tx_out_script_dissector = DissectorTable.get("bitcoin.tx.out.script")
---tx_out_script_dissector:add(8333, bsv_protocol)
+msg_dissectors = {}
 
-local bitcoin_dissector = Dissector.get("bitcoin")
-assert(bitcoin_dissector)
+function dissect_header(tvb, pinfo, tree)
+    local length = tvb:len()
+    assert(length >= 24)
+    
+    local subtree = tree:add(tvb, "Header")
+    subtree:add(fields.magic, tvb(0, 4))
+    subtree:add(fields.cmd, tvb(4, 12))
+    subtree:add_le(fields.length, tvb(16, 4))
+    subtree:add(fields.checksum, tvb(20, 4))
 
-local bitcoin_dissector_table = DissectorTable.get("bitcoin.tx")
-assert(bitcoin_dissector_table)
-bitcoin_dissector_table:remove("bitcoin.tx.out.script")
-bitcoin_dissector_table:add("bitcoin.tx.out.script", bsv_protocol)
+    local cmd = tvb:range(4, 12):stringz() 
+    --print('cmd: ' .. cmd)
+    --print('#cmd: ' .. #cmd)
+    if cmd == 'inv' then
+        msg_dissectors.inv(tvb, pinfo, tree)
+    elseif cmd == 'block' then
+        msg_dissectors.block(tvb, pinfo, tree)
+    elseif cmd == 'version' then
+        msg_dissectors.version(tvb, pinfo, tree)
+    else
+        msg_dissectors.default(cmd)
+    end
+end
+
+--msg_dissectors.inv = function (x, y) return x+y end
+
+msg_dissectors.inv = function (tvb, pinfo, tree)
+
+    print('*** inv dissector ****')
+--
+--    local count = tvb:uint(0, 1)
+--    tree:add(fields.inv_count(tvb(0, 1)))
+--
+--    local subtree = tree:add(tvb, "Inventory Vectors")
+
+end
+
+msg_dissectors.block = function (tvb, pinfo, tree)
+    print('*** block dissector ****')
+end
+
+msg_dissectors.version = function(tvb, pinfo, tree)
+    print('*** version dissector ***')
+end
+
+msg_dissectors.default = function(cmd)
+    print('*** unknown dissector ' .. cmd .. ' ***')
+end
+
+
+function dissect_inventory_vector(tvb, pinfo, tree)
+    
+end
+
+function bsv_protocol.dissector(tvb, pinfo, tree)
+    seg_len = tvb:len()
+    if seg_len < 24 then 
+        return 
+    end
+    
+    local msg_len = get_msg_length(tvb(16, 4)) 
+    if(msg_len > seg_len) then
+        pinfo.desegment_len = msg_len - seg_len;
+        pinfo.desegment_offset = 0 
+        return
+    end
+
+    pinfo.cols.protocol = bsv_protocol.name
+
+    local subtree = tree:add(bsv_protocol, tvb(), "Bitcoin SV")
+    dissect_header(tvb, pinfo, subtree)
+
+end
+
+
+
+local tcp_port_dissector = DissectorTable.get("tcp.port")
+
+tcp_port_dissector:add(8333, bsv_protocol)
+
