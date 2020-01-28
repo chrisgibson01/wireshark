@@ -8,7 +8,8 @@ fields.cmd = ProtoField.string("bsv.header.cmd", "Command")
 fields.length = ProtoField.uint32("bsv.header.length", "Length")
 fields.checksum = ProtoField.uint32("bsv.header.checksum", "Checksum")
 fields.inv_count = ProtoField.uint8("bsv.inv.count", "Count")
-
+fields.inv_type = ProtoField.uint32("bsv.inv.type", "Type")
+fields.inv_hash = ProtoField.bytes("bsv.inv.hash", "Hash")
 
 bsv_protocol.fields = fields 
 
@@ -24,7 +25,7 @@ function dissect_header(tvb, pinfo, tree)
     local length = tvb:len()
     assert(length >= 24)
     
-    local subtree = tree:add(tvb, "Header")
+    local subtree = tree:add("Header")
     subtree:add(fields.magic, tvb(0, 4))
     subtree:add(fields.cmd, tvb(4, 12))
     subtree:add_le(fields.length, tvb(16, 4))
@@ -34,26 +35,27 @@ function dissect_header(tvb, pinfo, tree)
     --print('cmd: ' .. cmd)
     --print('#cmd: ' .. #cmd)
     if cmd == 'inv' then
-        msg_dissectors.inv(tvb, pinfo, tree)
+        msg_dissectors.inv(tvb(24), pinfo, tree)
     elseif cmd == 'block' then
-        msg_dissectors.block(tvb, pinfo, tree)
+        msg_dissectors.block(tvb(24), pinfo, tree)
     elseif cmd == 'version' then
-        msg_dissectors.version(tvb, pinfo, tree)
+        msg_dissectors.version(tvb(24), pinfo, tree)
     else
         msg_dissectors.default(cmd)
     end
 end
 
---msg_dissectors.inv = function (x, y) return x+y end
-
 msg_dissectors.inv = function (tvb, pinfo, tree)
 
-    print('*** inv dissector ****')
---
---    local count = tvb:uint(0, 1)
---    tree:add(fields.inv_count(tvb(0, 1)))
---
---    local subtree = tree:add(tvb, "Inventory Vectors")
+    local count = tvb(0, 1):uint()
+    tree:add(fields.inv_count, tvb(0, 1))
+
+    local subtree = tree:add("Inventory Vectors")
+    print(count)
+    for i=1, 1, 12 do 
+        subtree:add_le(fields.inv_type, tvb(i, 4))
+        subtree:add(fields.inv_hash, tvb(i+4, 8))
+    end
 
 end
 
