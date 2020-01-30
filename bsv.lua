@@ -6,7 +6,7 @@ local fields = {}
 fields.magic = ProtoField.uint32("bsv.header.magic", "Magic", base.HEX)
 fields.cmd = ProtoField.string("bsv.header.cmd", "Command")
 fields.length = ProtoField.uint32("bsv.header.length", "Length")
-fields.checksum = ProtoField.uint32("bsv.header.checksum", "Checksum")
+fields.checksum = ProtoField.bytes("bsv.header.checksum", "Checksum")
 fields.inv_count = ProtoField.uint8("bsv.inv.count", "Count")
 fields.inv_type = ProtoField.uint32("bsv.inv.type", "Type")
 fields.inv_hash = ProtoField.bytes("bsv.inv.hash", "Hash")
@@ -15,7 +15,7 @@ bsv_protocol.fields = fields
 
 function get_msg_length(tvb)
     local len = tvb:le_uint()
-    --debug('length ' .. len)
+    debug('length ' .. len)
     return len 
 end
 
@@ -32,16 +32,12 @@ function dissect_header(tvb, pinfo, tree)
     subtree:add(fields.checksum, tvb(20, 4))
 
     local cmd = tvb:range(4, 12):stringz() 
-    --print('cmd: ' .. cmd)
-    --print('#cmd: ' .. #cmd)
-    if cmd == 'inv' then
-        msg_dissectors.inv(tvb(24), pinfo, tree)
-    elseif cmd == 'block' then
-        msg_dissectors.block(tvb(24), pinfo, tree)
-    elseif cmd == 'version' then
-        msg_dissectors.version(tvb(24), pinfo, tree)
+    print(cmd)
+    if cmd ~= nil then
+        msg_dissectors[cmd](tvb(24), pinfo, tree)
     else
-        msg_dissectors.default(cmd)
+       -- print(cmd .. ' dissector missing')
+       -- msg_dissectors.default(cmd)
     end
 end
 
@@ -58,6 +54,11 @@ msg_dissectors.inv = function (tvb, pinfo, tree)
     end
 
 end
+
+msg_dissectors.ping = function(tvb, pinfo, tree) end
+msg_dissectors.pong = function(tvb, pinfo, tree) end
+msg_dissectors.getheaders = function(tvb, pinfo, tree) end
+msg_dissectors.headers = function(tvb, pinfo, tree) end
 
 msg_dissectors.block = function (tvb, pinfo, tree)
     print('*** block dissector ****')
@@ -81,10 +82,15 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
     if seg_len < 24 then 
         return 
     end
+
+    print('\n**** dissecting ****')
     
     local msg_len = get_msg_length(tvb(16, 4)) 
+    print('msg_len: ' .. msg_len)
+    print('seg_len: ' .. seg_len)
     if(msg_len > seg_len) then
         pinfo.desegment_len = msg_len - seg_len;
+        print('pinfo.desegment_len: ' .. pinfo.desegment_len)
         pinfo.desegment_offset = 0 
         return
     end
@@ -95,8 +101,6 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
     dissect_header(tvb, pinfo, subtree)
 
 end
-
-
 
 local tcp_port_dissector = DissectorTable.get("tcp.port")
 
