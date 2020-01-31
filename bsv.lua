@@ -32,12 +32,15 @@ function dissect_header(tvb, pinfo, tree)
     subtree:add(fields.checksum, tvb(20, 4))
 
     local cmd = tvb:range(4, 12):stringz() 
-    print(cmd)
-    if cmd ~= nil then
-        msg_dissectors[cmd](tvb(24), pinfo, tree)
+    local cmd_dissector = msg_dissectors[cmd]
+    print('looking up ' .. cmd)
+    if cmd_dissector ~= nil then
+        print('dissecting cmd: ' .. cmd)
+        cmd_dissector(tvb(24), pinfo, tree)
     else
-       -- print(cmd .. ' dissector missing')
-       -- msg_dissectors.default(cmd)
+        print(cmd)
+        print(cmd .. ' dissector missing')
+       --msg_dissectors.default(cmd)
     end
 end
 
