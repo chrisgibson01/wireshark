@@ -15,17 +15,13 @@ fields.var_int1 = ProtoField.uint8("bsv.var_int", "var_int")
 
 bsv_protocol.fields = fields 
 
-function get_msg_length(tvb)
-    local len = tvb:le_uint()
-    debug('length ' .. len)
-    return len 
-end
-
 msg_dissectors = {}
+
+local header_len = 24
 
 function dissect_header(tvb, pinfo, tree)
     local length = tvb:len()
-    assert(length >= 24)
+    assert(length >= header_len)
     
     local subtree = tree:add("Header")
     subtree:add(fields.magic, tvb(0, 4))
@@ -36,25 +32,10 @@ function dissect_header(tvb, pinfo, tree)
     cmd = tvb:range(4, 12):stringz() 
     local cmd_dissector = msg_dissectors[cmd]
     if cmd_dissector ~= nil then
-        cmd_dissector(tvb(24), pinfo, tree)
+        cmd_dissector(tvb(header_len), pinfo, tree)
     else
        msg_dissectors.default(cmd)
     end
-end
-
-msg_dissectors.inv = function (tvb, pinfo, tree)
-    pinfo.cols.info = 'inv'
-
-    local count = tvb(0, 1):uint()
-    tree:add(fields.inv_count, tvb(0, 1))
-
-    local subtree = tree:add("Inventory Vectors")
-    print(count)
-    for i=1, 1, 12 do 
-        subtree:add_le(fields.inv_type, tvb(i, 4))
-        subtree:add(fields.hash, tvb(i+4, 8))
-    end
-
 end
 
 function var_int(tvb)
@@ -68,6 +49,36 @@ function var_int(tvb)
 --    else
 --        assert(false)
 --        return 3
+end
+
+msg_dissectors.inv = function (tvb, pinfo, tree)
+    pinfo.cols.info = 'inv'
+
+    local count = tvb(0, 1):uint() -- cjg var_int
+    tree:add(fields.inv_count, tvb(0, 1))
+
+    local subtree = tree:add("Inventory Vectors")
+    print(count)
+    for i=1, count*36, 36 do 
+        subtree:add_le(fields.inv_type, tvb(i, 4))
+        subtree:add(fields.hash, tvb(i+4, 32))
+    end
+
+end
+
+msg_dissectors.getdata = function (tvb, pinfo, tree)
+    pinfo.cols.info = 'getdata'
+    
+    local count = tvb(0, 1):uint() -- cjg var_int
+    tree:add(fields.inv_count, tvb(0, 1))
+
+    local subtree = tree:add("Inventory Vectors")
+    print(count)
+    for i=1, count*36, 36 do 
+        print(i)
+        subtree:add_le(fields.inv_type, tvb(i, 4))
+        subtree:add(fields.hash, tvb(i+4, 32))
+    end
 end
 
 msg_dissectors.getheaders = function(tvb, pinfo, tree) 
@@ -109,21 +120,23 @@ msg_dissectors.default = function(cmd)
     print('*** unknown dissector ' .. cmd .. ' ***')
 end
 
-
 function dissect_inventory_vector(tvb, pinfo, tree)
     
 end
 
+function get_payload_length(tvb)
+    return tvb:le_uint()
+end
+
 function bsv_protocol.dissector(tvb, pinfo, tree)
     seg_len = tvb:len()
-    if seg_len < 24 then 
+    if seg_len < header_len then 
         return 
     end
 
-    print('\n**** dissecting ****')
-    
-    local msg_len = get_msg_length(tvb(16, 4)) 
-    print('msg_len: ' .. msg_len)
+    local payload_len = get_payload_length(tvb(16, 4)) 
+    print('payload_len: ' .. payload_len)
+    local msg_len = header_len + payload_len
     print('seg_len: ' .. seg_len)
     if(msg_len > seg_len) then
         pinfo.desegment_len = msg_len - seg_len;
