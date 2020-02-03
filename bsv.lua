@@ -9,7 +9,9 @@ fields.length = ProtoField.uint32("bsv.header.length", "Length")
 fields.checksum = ProtoField.bytes("bsv.header.checksum", "Checksum")
 fields.inv_count = ProtoField.uint8("bsv.inv.count", "Count")
 fields.inv_type = ProtoField.uint32("bsv.inv.type", "Type")
-fields.inv_hash = ProtoField.bytes("bsv.inv.hash", "Hash")
+fields.hash = ProtoField.bytes("bsv.hash", "Hash")
+fields.getheaders_version = ProtoField.uint32("bsv.getheaders.version", "Version")
+fields.var_int1 = ProtoField.uint8("bsv.var_int", "var_int")
 
 bsv_protocol.fields = fields 
 
@@ -31,20 +33,17 @@ function dissect_header(tvb, pinfo, tree)
     subtree:add_le(fields.length, tvb(16, 4))
     subtree:add(fields.checksum, tvb(20, 4))
 
-    local cmd = tvb:range(4, 12):stringz() 
+    cmd = tvb:range(4, 12):stringz() 
     local cmd_dissector = msg_dissectors[cmd]
-    print('looking up ' .. cmd)
     if cmd_dissector ~= nil then
-        print('dissecting cmd: ' .. cmd)
         cmd_dissector(tvb(24), pinfo, tree)
     else
-        print(cmd)
-        print(cmd .. ' dissector missing')
-       --msg_dissectors.default(cmd)
+       msg_dissectors.default(cmd)
     end
 end
 
 msg_dissectors.inv = function (tvb, pinfo, tree)
+    pinfo.cols.info = 'inv'
 
     local count = tvb(0, 1):uint()
     tree:add(fields.inv_count, tvb(0, 1))
@@ -53,21 +52,56 @@ msg_dissectors.inv = function (tvb, pinfo, tree)
     print(count)
     for i=1, 1, 12 do 
         subtree:add_le(fields.inv_type, tvb(i, 4))
-        subtree:add(fields.inv_hash, tvb(i+4, 8))
+        subtree:add(fields.hash, tvb(i+4, 8))
     end
 
 end
 
-msg_dissectors.ping = function(tvb, pinfo, tree) end
-msg_dissectors.pong = function(tvb, pinfo, tree) end
-msg_dissectors.getheaders = function(tvb, pinfo, tree) end
-msg_dissectors.headers = function(tvb, pinfo, tree) end
+function var_int(tvb)
+    return 1
+--  cjg
+--    local n = tvb(0, 1):int()
+--    if n < 0xfd then
+--        return 1
+----    elseif n <= 0xfe then 
+----        return tvb(0, 3)
+--    else
+--        assert(false)
+--        return 3
+end
+
+msg_dissectors.getheaders = function(tvb, pinfo, tree) 
+    pinfo.cols.info = 'getheaders'
+
+    local subtree = tree:add("getheaders")
+    subtree:add_le(fields.getheaders_version, tvb(0, 4)) 
+    local len = var_int(tvb(4, 9))
+    print(len)
+    subtree:add(fields.var_int1, tvb(4, len))
+
+    local count = tvb(4, len):uint()
+    for i=1, count*32, 32 do
+        subtree:add(fields.hash, tvb(4 + i, 32))
+    end
+end
+
+msg_dissectors.ping = function(tvb, pinfo, tree) 
+    pinfo.cols.info = 'ping'
+end
+msg_dissectors.pong = function(tvb, pinfo, tree) 
+    pinfo.cols.info = 'pong'
+end
+msg_dissectors.headers = function(tvb, pinfo, tree) 
+    pinfo.cols.info = 'headers'
+end
 
 msg_dissectors.block = function (tvb, pinfo, tree)
+    pinfo.cols.info = 'block'
     print('*** block dissector ****')
 end
 
 msg_dissectors.version = function(tvb, pinfo, tree)
+    pinfo.cols.info = 'version'
     print('*** version dissector ***')
 end
 
