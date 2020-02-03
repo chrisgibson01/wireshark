@@ -13,11 +13,79 @@ fields.hash = ProtoField.bytes("bsv.hash", "Hash")
 fields.getheaders_version = ProtoField.uint32("bsv.getheaders.version", "Version")
 fields.var_int1 = ProtoField.uint8("bsv.var_int", "var_int")
 
+fields.block_version = ProtoField.uint32("bsv.block.version", "Version")
+fields.block_prev_block = ProtoField.bytes("bsv.block.pre_block", "Prev Block")
+fields.block_merkle_root = ProtoField.bytes("bsv.block.merkle_root", "Merkle Root")
+fields.block_timestamp = ProtoField.absolute_time("bsv.block.timestamp", "Timestamp", base.UTC)
+fields.block_difficulty = ProtoField.uint32("bsv.block.difficulty", "Difficulty")  -- cjg bits
+fields.block_nonce = ProtoField.uint32("bsv.block.nonce", "Nonce")
+
+fields.tx_count_1 = ProtoField.int8("bsv.tx_count1", "Count")
+fields.tx_count_2 = ProtoField.int16("bsv.tx_count2", "Count")
+fields.tx_count_4 = ProtoField.int32("bsv.tx_count4", "Count")
+fields.tx_count_8 = ProtoField.int64("bsv.tx_count8", "Count")
+fields.tx_version = ProtoField.int32("bsv.tx_version", "Version")
+
 bsv_protocol.fields = fields 
 
 msg_dissectors = {}
 
 local header_len = 24
+
+function var_int(tvb)
+
+    local n = tvb(0, 1):uint()
+    if n < 0xfd then
+        return 1, n
+    elseif n == 0xfd then 
+        return 2, tvb(1, 2):uint()
+    elseif n == 0xfe then 
+        return 4, tvb(1, 4):uint()
+    elseif n == 0xff then 
+        return 8, tvb(1, 8):uint()
+    else
+        assert(false)
+    end
+end
+
+function dissect_tx(tvb, pinfo, tree)
+    local subtree = tree:add('Tx')
+    subtree:add_le(fields.tx_version, tvb(0, 4))
+
+end
+
+msg_dissectors.block = function (tvb, pinfo, tree)
+    pinfo.cols.info = 'block'
+
+    local subtree = tree:add("block")
+    subtree:add_le(fields.block_version, tvb(0, 4))
+    subtree:add(fields.block_prev_block, tvb(4, 32))
+    subtree:add(fields.block_merkle_root, tvb(36, 32))
+    subtree:add_le(fields.block_timestamp, tvb(68, 4))
+    subtree:add_le(fields.block_difficulty, tvb(72, 4))
+    subtree:add_le(fields.block_nonce, tvb(76, 4))
+    
+    --local tx_count = tvb(80, 1):uint() -- cjg var_int
+    local tx_len, tx_count = var_int(tvb(80)) 
+    print('tx_len: ' .. tx_len)
+    print('tx_count: ' .. tx_count)
+    
+    if tx_len == 1 then
+        subtree:add(fields.tx_count_1, tvb(80, tx_len))
+    elseif tx_len == 2 then
+        subtree:add(fields.tx_count_2, tvb(81, tx_len))
+    elseif tx_len == 4 then
+        subtree:add(fields.tx_count_4, tvb(81, tx_len))
+    elseif tx_len == 8 then
+        subtree:add(fields.tx_count_8, tvb(81, tx_len))
+    else
+        assert(false)
+    end    
+
+    --for i = 1 to tx_count*h
+    dissect_tx(tvb(81 + tx_len), pinfo, subtree) 
+
+end
 
 function dissect_header(tvb, pinfo, tree)
     local length = tvb:len()
@@ -38,23 +106,11 @@ function dissect_header(tvb, pinfo, tree)
     end
 end
 
-function var_int(tvb)
-    return 1
---  cjg
---    local n = tvb(0, 1):int()
---    if n < 0xfd then
---        return 1
-----    elseif n <= 0xfe then 
-----        return tvb(0, 3)
---    else
---        assert(false)
---        return 3
-end
-
 msg_dissectors.inv = function (tvb, pinfo, tree)
     pinfo.cols.info = 'inv'
 
-    local count = tvb(0, 1):uint() -- cjg var_int
+    --local count = tvb(0, 1):uint() -- cjg var_int
+    local count = var_int(tvb) 
     tree:add(fields.inv_count, tvb(0, 1))
 
     local subtree = tree:add("Inventory Vectors")
@@ -69,7 +125,8 @@ end
 msg_dissectors.getdata = function (tvb, pinfo, tree)
     pinfo.cols.info = 'getdata'
     
-    local count = tvb(0, 1):uint() -- cjg var_int
+    --local count = tvb(0, 1):uint() -- cjg var_int
+    local count = var_int(tvb) 
     tree:add(fields.inv_count, tvb(0, 1))
 
     local subtree = tree:add("Inventory Vectors")
@@ -86,7 +143,8 @@ msg_dissectors.getheaders = function(tvb, pinfo, tree)
 
     local subtree = tree:add("getheaders")
     subtree:add_le(fields.getheaders_version, tvb(0, 4)) 
-    local len = var_int(tvb(4, 9))
+    local count = var_int(tvb(4, 9))
+    --local len = var_int(tvb(4, 9))
     print(len)
     subtree:add(fields.var_int1, tvb(4, len))
 
@@ -104,11 +162,6 @@ msg_dissectors.pong = function(tvb, pinfo, tree)
 end
 msg_dissectors.headers = function(tvb, pinfo, tree) 
     pinfo.cols.info = 'headers'
-end
-
-msg_dissectors.block = function (tvb, pinfo, tree)
-    pinfo.cols.info = 'block'
-    print('*** block dissector ****')
 end
 
 msg_dissectors.version = function(tvb, pinfo, tree)
