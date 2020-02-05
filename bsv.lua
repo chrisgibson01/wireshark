@@ -36,6 +36,12 @@ fields.tx_version = ProtoField.int32("bsv.tx_version", "Version")
 fields.version_version = ProtoField.int32("bsv.version.version", "Version")
 fields.version_services = ProtoField.bytes("bsv.version.services", "Services")
 fields.version_timestamp = ProtoField.absolute_time("bsv.version.timestamp", "Timestamp", base.UTC)
+fields.version_nonce = ProtoField.uint64("bsv.version.nonce", "Nonce")
+
+fields.network_address_version = ProtoField.uint32("bsv.network_addr.version", "Version")
+fields.network_address_port = ProtoField.uint16("bsv.network_addr.port", "Port")
+fields.network_address_services = ProtoField.bytes("bsv.network_addr.services", "Services")
+fields.network_address_ip = ProtoField.ipv6("bsv.network_addr.ip", "IP Address")
 
 msg_dissectors = {}
 
@@ -58,6 +64,12 @@ function var_int(tvb)
     end
 end
 
+function dissect_network_addr(tvb, pinfo, tree)
+    --tree:add_le(fields.network_address_version, tvb(0, 4))
+    tree:add(fields.network_address_services, tvb(0, 8))
+    tree:add(fields.network_address_ip, tvb(8, 16))
+    tree:add(fields.network_address_port, tvb(24, 2)) 
+end
 
 msg_dissectors.version = function(tvb, pinfo, tree)
     pinfo.cols.info = 'version'
@@ -65,6 +77,15 @@ msg_dissectors.version = function(tvb, pinfo, tree)
     subtree:add_le(fields.version_version, tvb(0, 4))
     subtree:add(fields.version_services, tvb(4, 8))
     subtree:add_le(fields.version_timestamp, tvb(12, 8))
+    
+    dissect_network_addr(tvb(20), pinfo, subtree)
+    dissect_network_addr(tvb(46), pinfo, subtree)
+    
+    subtree:add(fields.version_nonce, tvb(72, 8))
+    
+    local len, n  = var_int(tvb(80))
+    print('str len: ' .. len)
+    print('str n: ' .. n)
 end
 
 function dissect_tx(tvb, pinfo, tree)
