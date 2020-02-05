@@ -10,8 +10,13 @@ fields.checksum = ProtoField.bytes("bsv.header.checksum", "Checksum")
 fields.inv_count = ProtoField.uint8("bsv.inv.count", "Count")
 fields.inv_type = ProtoField.uint32("bsv.inv.type", "Type")
 fields.hash = ProtoField.bytes("bsv.hash", "Hash")
+
 fields.getheaders_version = ProtoField.uint32("bsv.getheaders.version", "Version")
-fields.var_int1 = ProtoField.uint8("bsv.var_int", "var_int")
+
+fields.var_int1 = ProtoField.uint8("bsv.var_int_1", "var_int")
+fields.var_int2 = ProtoField.uint16("bsv.var_int_2", "var_int")
+fields.var_int3 = ProtoField.uint32("bsv.var_int_4", "var_int")
+fields.var_int4 = ProtoField.uint64("bsv.var_int_8", "var_int")
 
 fields.block_version = ProtoField.uint32("bsv.block.version", "Version")
 fields.block_prev_block = ProtoField.bytes("bsv.block.pre_block", "Prev Block")
@@ -20,20 +25,25 @@ fields.block_timestamp = ProtoField.absolute_time("bsv.block.timestamp", "Timest
 fields.block_difficulty = ProtoField.uint32("bsv.block.difficulty", "Difficulty")  -- cjg bits
 fields.block_nonce = ProtoField.uint32("bsv.block.nonce", "Nonce")
 
+--fields.block_header_version
+
 fields.tx_count_1 = ProtoField.int8("bsv.tx_count1", "Count")
 fields.tx_count_2 = ProtoField.int16("bsv.tx_count2", "Count")
 fields.tx_count_4 = ProtoField.int32("bsv.tx_count4", "Count")
 fields.tx_count_8 = ProtoField.int64("bsv.tx_count8", "Count")
 fields.tx_version = ProtoField.int32("bsv.tx_version", "Version")
 
-bsv_protocol.fields = fields 
+fields.version_version = ProtoField.int32("bsv.version.version", "Version")
+fields.version_services = ProtoField.bytes("bsv.version.services", "Services")
+fields.version_timestamp = ProtoField.absolute_time("bsv.version.timestamp", "Timestamp", base.UTC)
 
 msg_dissectors = {}
+
+bsv_protocol.fields = fields
 
 local header_len = 24
 
 function var_int(tvb)
-
     local n = tvb(0, 1):uint()
     if n < 0xfd then
         return 1, n
@@ -48,10 +58,18 @@ function var_int(tvb)
     end
 end
 
+
+msg_dissectors.version = function(tvb, pinfo, tree)
+    pinfo.cols.info = 'version'
+    local subtree = tree:add('Version')
+    subtree:add_le(fields.version_version, tvb(0, 4))
+    subtree:add(fields.version_services, tvb(4, 8))
+    subtree:add_le(fields.version_timestamp, tvb(12, 8))
+end
+
 function dissect_tx(tvb, pinfo, tree)
     local subtree = tree:add('Tx')
     subtree:add_le(fields.tx_version, tvb(0, 4))
-
 end
 
 msg_dissectors.block = function (tvb, pinfo, tree)
@@ -98,12 +116,7 @@ function dissect_header(tvb, pinfo, tree)
     subtree:add(fields.checksum, tvb(20, 4))
 
     cmd = tvb:range(4, 12):stringz() 
-    local cmd_dissector = msg_dissectors[cmd]
-    if cmd_dissector ~= nil then
-        cmd_dissector(tvb(header_len), pinfo, tree)
-    else
-       msg_dissectors.default(cmd)
-    end
+    return cmd
 end
 
 msg_dissectors.inv = function (tvb, pinfo, tree)
@@ -144,8 +157,6 @@ msg_dissectors.getheaders = function(tvb, pinfo, tree)
     local subtree = tree:add("getheaders")
     subtree:add_le(fields.getheaders_version, tvb(0, 4)) 
     local len, n  = var_int(tvb(4))
-    --local len = var_int(tvb(4, 9))
-    print(len)
     subtree:add(fields.var_int1, tvb(4, len))
 
     local count = tvb(4, len):uint()
@@ -157,22 +168,27 @@ msg_dissectors.getheaders = function(tvb, pinfo, tree)
     subtree:add(fields.hash, tvb(5 + (count*32), 32))
 end
 
+msg_dissectors.headers = function(tvb, pinfo, tree) 
+    pinfo.cols.info = 'headers'
+
+    local subtree = tree:add("headers")
+    local len, n = var_int(tvb)
+    subtree:add_le(fields.var_int2, tvb(1, len))
+    
+end
+
 msg_dissectors.ping = function(tvb, pinfo, tree) 
     pinfo.cols.info = 'ping'
 end
 msg_dissectors.pong = function(tvb, pinfo, tree) 
     pinfo.cols.info = 'pong'
 end
-msg_dissectors.headers = function(tvb, pinfo, tree) 
-    pinfo.cols.info = 'headers'
+
+msg_dissectors.default = function(cmd, pinfo)
+    pinfo.cols.info = cmd
 end
 
-msg_dissectors.version = function(tvb, pinfo, tree)
-    pinfo.cols.info = 'version'
-    print('*** version dissector ***')
-end
-
-msg_dissectors.default = function(cmd)
+msg_dissectors.unknown = function(cmd)
     print('*** unknown dissector ' .. cmd .. ' ***')
 end
 
@@ -204,8 +220,18 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
     pinfo.cols.protocol = bsv_protocol.name
 
     local subtree = tree:add(bsv_protocol, tvb(), "Bitcoin SV")
-    dissect_header(tvb, pinfo, subtree)
+    cmd = dissect_header(tvb, pinfo, subtree)
 
+    if payload_len > 0 then
+        local cmd_dissector = msg_dissectors[cmd]
+        if cmd_dissector ~= nil then
+            cmd_dissector(tvb(header_len), pinfo, subtree)
+        else
+            msg_dissectors.unknown(cmd)
+        end
+    else
+        msg_dissectors.default(cmd, pinfo)
+    end
 end
 
 local tcp_port_dissector = DissectorTable.get("tcp.port")
