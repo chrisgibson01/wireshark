@@ -143,7 +143,7 @@ msg_dissectors.getheaders = function(tvb, pinfo, tree)
 
     local subtree = tree:add("getheaders")
     subtree:add_le(fields.getheaders_version, tvb(0, 4)) 
-    local count = var_int(tvb(4, 9))
+    local len, n  = var_int(tvb(4))
     --local len = var_int(tvb(4, 9))
     print(len)
     subtree:add(fields.var_int1, tvb(4, len))
@@ -152,6 +152,9 @@ msg_dissectors.getheaders = function(tvb, pinfo, tree)
     for i=1, count*32, 32 do
         subtree:add(fields.hash, tvb(4 + i, 32))
     end
+    
+    -- hash stop cjg
+    subtree:add(fields.hash, tvb(5 + (count*32), 32))
 end
 
 msg_dissectors.ping = function(tvb, pinfo, tree) 
