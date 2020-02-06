@@ -3,6 +3,10 @@
 bsv_protocol = Proto("BSV",  "Bitcoin SV Protocol")
 
 local fields = {}
+
+fields.ping_nonce = ProtoField.uint64("bsv.ping.nonce", "Random Nonce")
+fields.pong_nonce = ProtoField.uint64("bsv.pong.nonce", "Reply Nonce")
+
 fields.magic = ProtoField.uint32("bsv.header.magic", "Magic", base.HEX)
 fields.cmd = ProtoField.string("bsv.header.cmd", "Command")
 fields.length = ProtoField.uint32("bsv.header.length", "Length")
@@ -200,8 +204,10 @@ end
 
 msg_dissectors.ping = function(tvb, pinfo, tree) 
     pinfo.cols.info = 'ping'
+    tree:add(fields.ping_nonce, tvb(0, 8))
 end
 msg_dissectors.pong = function(tvb, pinfo, tree) 
+    tree:add(fields.pong_nonce, tvb(0, 8))
     pinfo.cols.info = 'pong'
 end
 
