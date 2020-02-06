@@ -88,8 +88,9 @@ msg_dissectors.version = function(tvb, pinfo, tree)
     subtree:add(fields.version_nonce, tvb(72, 8))
     
     local len, n  = var_int(tvb(80))
-    print('str len: ' .. len)
-    print('str n: ' .. n)
+    --cjg
+    --print('str len: ' .. len)
+    --print('str n: ' .. n)
 end
 
 function dissect_tx(tvb, pinfo, tree)
@@ -110,8 +111,6 @@ msg_dissectors.block = function (tvb, pinfo, tree)
     
     --local tx_count = tvb(80, 1):uint() -- cjg var_int
     local tx_len, tx_count = var_int(tvb(80)) 
-    print('tx_len: ' .. tx_len)
-    print('tx_count: ' .. tx_count)
     
     if tx_len == 1 then
         subtree:add(fields.tx_count_1, tvb(80, tx_len))
@@ -125,7 +124,7 @@ msg_dissectors.block = function (tvb, pinfo, tree)
         assert(false)
     end    
 
-    --for i = 1 to tx_count*h
+    --cjg for i = 1 to tx_count*h
     dissect_tx(tvb(81 + tx_len), pinfo, subtree) 
 
 end
@@ -147,17 +146,14 @@ end
 msg_dissectors.inv = function (tvb, pinfo, tree)
     pinfo.cols.info = 'inv'
 
-    --local count = tvb(0, 1):uint() -- cjg var_int
     local count = var_int(tvb) 
     tree:add(fields.inv_count, tvb(0, 1))
 
     local subtree = tree:add("Inventory Vectors")
-    print(count)
     for i=1, count*36, 36 do 
         subtree:add_le(fields.inv_type, tvb(i, 4))
         subtree:add(fields.hash, tvb(i+4, 32))
     end
-
 end
 
 msg_dissectors.getdata = function (tvb, pinfo, tree)
@@ -168,9 +164,7 @@ msg_dissectors.getdata = function (tvb, pinfo, tree)
     tree:add(fields.inv_count, tvb(0, 1))
 
     local subtree = tree:add("Inventory Vectors")
-    print(count)
     for i=1, count*36, 36 do 
-        print(i)
         subtree:add_le(fields.inv_type, tvb(i, 4))
         subtree:add(fields.hash, tvb(i+4, 32))
     end
@@ -234,12 +228,9 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
     end
 
     local payload_len = get_payload_length(tvb(16, 4)) 
-    print('payload_len: ' .. payload_len)
     local msg_len = header_len + payload_len
-    print('seg_len: ' .. seg_len)
     if(msg_len > seg_len) then
         pinfo.desegment_len = msg_len - seg_len;
-        print('pinfo.desegment_len: ' .. pinfo.desegment_len)
         pinfo.desegment_offset = 0 
         return
     end
