@@ -29,7 +29,7 @@ fields.block_timestamp = ProtoField.absolute_time("bsv.block.timestamp", "Timest
 fields.block_difficulty = ProtoField.uint32("bsv.block.difficulty", "Difficulty")  -- cjg bits
 fields.block_nonce = ProtoField.uint32("bsv.block.nonce", "Nonce")
 
---fields.block_header_version
+fields.addr_timestamp = ProtoField.absolute_time("bsv.addr.timestamp", "Timestamp")
 
 fields.tx_count_1 = ProtoField.int8("bsv.tx_count1", "Count")
 fields.tx_count_2 = ProtoField.int16("bsv.tx_count2", "Count")
@@ -95,6 +95,34 @@ msg_dissectors.version = function(tvb, pinfo, tree)
     subtree:add(fields.version_user_agent, tvb(user_agent_start, n))
     subtree:add_le(fields.version_block_height, tvb(user_agent_start+n, 4))
     subtree:add(fields.version_relay, tvb(user_agent_start+n+4, 1))
+end
+
+msg_dissectors.addr = function(tvb, pinfo, tree)
+    
+    pinfo.cols.info = 'addr'
+
+    local subtree = tree:add('addr')
+    
+    -- cjg extract method
+    local len, n = var_int(tvb)
+    if len == 1 then
+        subtree:add(fields.var_int1, tvb(0, len))
+    elseif len == 2 then
+        subtree:add(fields.var_int2, tvb(1, len))
+    elseif len == 4 then
+        subtree:add(fields.var_int4, tvb(1, len))
+    elseif len == 8 then
+        subtree:add(fields.var_int8, tvb(1, len))
+    else
+        assert(false)
+    end    
+
+    subtree:add_le(fields.addr_timestamp, tvb(1, 4))
+   
+    -- cjg wip support more than len 1
+    for i=1, n*26, 26 do 
+        dissect_network_addr(tvb(i + 4, 26), pinfo, subtree) 
+    end
 end
 
 function dissect_tx(tvb, pinfo, tree)
@@ -206,6 +234,14 @@ end
 msg_dissectors.pong = function(tvb, pinfo, tree) 
     tree:add(fields.pong_nonce, tvb(0, 8))
     pinfo.cols.info = 'pong'
+end
+
+msg_dissectors.protoconf = function (tvb, pinfo, tree)
+    pinfo.cols.info = 'protoconf'
+end
+
+msg_dissectors.sendcmpct = function (tvb, pinfo, tree)
+    pinfo.cols.info = 'sendcmpct'
 end
 
 msg_dissectors.default = function(cmd, pinfo)
