@@ -113,7 +113,6 @@ msg_dissectors.block = function (tvb, pinfo, tree)
     subtree:add_le(fields.block_difficulty, tvb(72, 4))
     subtree:add_le(fields.block_nonce, tvb(76, 4))
     
-    --local tx_count = tvb(80, 1):uint() -- cjg var_int
     local tx_len, tx_count = var_int(tvb(80)) 
     
     if tx_len == 1 then
