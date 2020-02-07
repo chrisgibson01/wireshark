@@ -61,21 +61,21 @@ function var_int(tvb)
     if n < 0xfd then
         return 1, n
     elseif n == 0xfd then 
-        return 2, tvb(1, 2):uint()
+        return 2, tvb(1, 2):le_uint()
     elseif n == 0xfe then 
-        return 4, tvb(1, 4):uint()
+        return 4, tvb(1, 4):le_uint()
     elseif n == 0xff then 
-        return 8, tvb(1, 8):uint()
+        return 8, tvb(1, 8):le_uint()
     else
         assert(false)
     end
 end
 
 function dissect_network_addr(tvb, pinfo, tree)
-    --tree:add_le(fields.network_address_version, tvb(0, 4))
-    tree:add(fields.network_address_services, tvb(0, 8))
-    tree:add(fields.network_address_ip, tvb(8, 16))
-    tree:add(fields.network_address_port, tvb(24, 2)) 
+    local subtree = tree:add('Network Address')
+    subtree:add(fields.network_address_services, tvb(0, 8))
+    subtree:add(fields.network_address_ip, tvb(8, 16))
+    subtree:add(fields.network_address_port, tvb(24, 2)) 
 end
 
 msg_dissectors.version = function(tvb, pinfo, tree)
@@ -117,11 +117,10 @@ msg_dissectors.addr = function(tvb, pinfo, tree)
         assert(false)
     end    
 
-    subtree:add_le(fields.addr_timestamp, tvb(1, 4))
-   
-    -- cjg wip support more than len 1
-    for i=1, n*26, 26 do 
-        dissect_network_addr(tvb(i + 4, 26), pinfo, subtree) 
+    local offset = len == 1 and 0 or len 
+    for i=1, n*30, 30 do 
+        subtree:add_le(fields.addr_timestamp, tvb(i + offset, 4))
+        dissect_network_addr(tvb(i + offset + 4, 26), pinfo, subtree) 
     end
 end
 
@@ -190,14 +189,25 @@ end
 msg_dissectors.getdata = function (tvb, pinfo, tree)
     pinfo.cols.info = 'getdata'
     
-    --local count = tvb(0, 1):uint() -- cjg var_int
-    local count = var_int(tvb) 
-    tree:add(fields.inv_count, tvb(0, 1))
+    -- cjg extract method
+    local len, n = var_int(tvb)
+    if len == 1 then
+        tree:add(fields.var_int1, tvb(0, len))
+    elseif len == 2 then
+        tree:add(fields.var_int2, tvb(1, len))
+    elseif len == 4 then
+        tree:add(fields.var_int4, tvb(1, len))
+    elseif len == 8 then
+        tree:add(fields.var_int8, tvb(1, len))
+    else
+        assert(false)
+    end    
 
+    local offset = len == 1 and 0 or len 
     local subtree = tree:add("Inventory Vectors")
-    for i=1, count*36, 36 do 
-        subtree:add_le(fields.inv_type, tvb(i, 4))
-        subtree:add(fields.hash, tvb(i+4, 32))
+    for i=1, n*36, 36 do 
+        subtree:add_le(fields.inv_type, tvb(i+offset, 4))
+        subtree:add(fields.hash, tvb(i+offset+4, 32))
     end
 end
 
