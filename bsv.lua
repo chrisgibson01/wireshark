@@ -22,6 +22,11 @@ fields.var_int2 = ProtoField.uint16("bsv.var_int_2", "var_int")
 fields.var_int3 = ProtoField.uint32("bsv.var_int_4", "var_int")
 fields.var_int4 = ProtoField.uint64("bsv.var_int_8", "var_int")
 
+fields.out_point_index = ProtoField.uint32("bsv.out_point.index", "Index")
+
+fields.tx_in_signature_script = ProtoField.string("bsv.tx_in_signature_script", "Signature Script")
+fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence")
+
 fields.block_version = ProtoField.uint32("bsv.block.version", "Version")
 fields.block_prev_block = ProtoField.bytes("bsv.block.pre_block", "Prev Block")
 fields.block_merkle_root = ProtoField.bytes("bsv.block.merkle_root", "Merkle Root")
@@ -96,6 +101,22 @@ msg_dissectors.version = function(tvb, pinfo, tree)
     subtree:add_le(fields.version_block_height, tvb(user_agent_start+n, 4))
     subtree:add(fields.version_relay, tvb(user_agent_start+n+4, 1))
 end
+    
+function tofan(tvb, tree)
+    local len, n = var_int(tvb)
+    if len == 1 then
+        tree:add(fields.var_int1, tvb(0, len))
+    elseif len == 2 then
+        tree:add(fields.var_int2, tvb(1, len))
+    elseif len == 4 then
+        tree:add(fields.var_int4, tvb(1, len))
+    elseif len == 8 then
+        tree:add(fields.var_int8, tvb(1, len))
+    else
+        assert(false)
+    end    
+    return len, n 
+end
 
 msg_dissectors.addr = function(tvb, pinfo, tree)
     
@@ -124,9 +145,31 @@ msg_dissectors.addr = function(tvb, pinfo, tree)
     end
 end
 
+function dissect_out_point(tvb, tree) 
+    local subtree = tree:add('OutPoint')
+    subtree:add(fields.hash, tvb(0, 32))
+    subtree:add(fields.out_point_index, tvb(32, 4))
+end
+
+function dissect_tx_in(tvb, tree) 
+    local subtree = tree:add('TxIn')
+    dissect_out_point(tvb(0, 36), subtree)
+    
+    local len, n = tofan(tvb(36), subtree)
+    local offset = len == 1 and 0 or len 
+    subtree:add(fields.tx_in_signature_script, tvb(36+offset+1, n)) 
+    subtree:add(fields.tx_in_sequence, tvb(36+offset+1+n, 4))
+end
+
 function dissect_tx(tvb, pinfo, tree)
     local subtree = tree:add('Tx')
     subtree:add_le(fields.tx_version, tvb(0, 4))
+    local len, n = tofan(tvb(4), subtree)
+    local offset = len == 1 and 0 or len 
+    --for i=1, n*41, 41 do 
+        dissect_tx_in(tvb(1 + offset + 4), subtree) 
+        --dissect_tx_in(tvb(i + offset + 4, 26), pinfo, subtree) 
+    --end
 end
 
 msg_dissectors.block = function (tvb, pinfo, tree)
@@ -155,7 +198,7 @@ msg_dissectors.block = function (tvb, pinfo, tree)
     end    
 
     --cjg for i = 1 to tx_count*h
-    dissect_tx(tvb(81 + tx_len), pinfo, subtree) 
+    dissect_tx(tvb(80 + tx_len), pinfo, subtree) 
 
 end
 
