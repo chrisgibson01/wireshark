@@ -27,6 +27,10 @@ fields.out_point_index = ProtoField.uint32("bsv.out_point.index", "Index")
 fields.tx_in_signature_script = ProtoField.string("bsv.tx_in_signature_script", "Signature Script")
 fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence")
 
+fields.tx_out_value = ProtoField.int64("bsv.tx_out.value", "Value")
+fields.tx_out_script = ProtoField.string("bsv.tx_out.script", "Public Key Script")
+fields.tx_lock_time = ProtoField.uint32("bsv.tx_out.lock_time", "Lock Time")
+
 fields.block_version = ProtoField.uint32("bsv.block.version", "Version")
 fields.block_prev_block = ProtoField.bytes("bsv.block.pre_block", "Prev Block")
 fields.block_merkle_root = ProtoField.bytes("bsv.block.merkle_root", "Merkle Root")
@@ -36,10 +40,6 @@ fields.block_nonce = ProtoField.uint32("bsv.block.nonce", "Nonce")
 
 fields.addr_timestamp = ProtoField.absolute_time("bsv.addr.timestamp", "Timestamp")
 
-fields.tx_count_1 = ProtoField.int8("bsv.tx_count1", "Count")
-fields.tx_count_2 = ProtoField.int16("bsv.tx_count2", "Count")
-fields.tx_count_4 = ProtoField.int32("bsv.tx_count4", "Count")
-fields.tx_count_8 = ProtoField.int64("bsv.tx_count8", "Count")
 fields.tx_version = ProtoField.int32("bsv.tx_version", "Version")
 
 fields.version_version = ProtoField.int32("bsv.version.version", "Version")
@@ -66,14 +66,30 @@ function var_int(tvb)
     if n < 0xfd then
         return 1, n
     elseif n == 0xfd then 
-        return 2, tvb(1, 2):le_uint()
+        return 3, tvb(1, 2):le_uint()
     elseif n == 0xfe then 
-        return 4, tvb(1, 4):le_uint()
+        return 5, tvb(1, 4):le_uint()
     elseif n == 0xff then 
-        return 8, tvb(1, 8):le_uint64()
+        return 9, tvb(1, 8):le_uint64()
     else
         assert(false)
     end
+end
+
+function tofan(tvb, tree)
+    local len, n = var_int(tvb)
+    if len == 1 then
+        tree:add(fields.var_int1, tvb(0, len))
+    elseif len == 3 then
+        tree:add_le(fields.var_int2, tvb(1, len-1))
+    elseif len == 5 then
+        tree:add_le(fields.var_int4, tvb(1, len-1))
+    elseif len == 9 then
+        tree:add_le(fields.var_int8, tvb(1, len-1))
+    else
+        assert(false)
+    end    
+    return len, n 
 end
 
 function dissect_network_addr(tvb, pinfo, tree)
@@ -102,74 +118,67 @@ msg_dissectors.version = function(tvb, pinfo, tree)
     subtree:add(fields.version_relay, tvb(user_agent_start+n+4, 1))
 end
     
-function tofan(tvb, tree)
-    local len, n = var_int(tvb)
-    if len == 1 then
-        tree:add(fields.var_int1, tvb(0, len))
-    elseif len == 2 then
-        tree:add(fields.var_int2, tvb(1, len))
-    elseif len == 4 then
-        tree:add(fields.var_int4, tvb(1, len))
-    elseif len == 8 then
-        tree:add(fields.var_int8, tvb(1, len))
-    else
-        assert(false)
-    end    
-    return len, n 
-end
-
 msg_dissectors.addr = function(tvb, pinfo, tree)
     
     pinfo.cols.info = 'addr'
 
     local subtree = tree:add('addr')
     
-    -- cjg extract method
-    local len, n = var_int(tvb)
-    if len == 1 then
-        subtree:add(fields.var_int1, tvb(0, len))
-    elseif len == 2 then
-        subtree:add(fields.var_int2, tvb(1, len))
-    elseif len == 4 then
-        subtree:add(fields.var_int4, tvb(1, len))
-    elseif len == 8 then
-        subtree:add(fields.var_int8, tvb(1, len))
-    else
-        assert(false)
-    end    
-
-    local offset = len == 1 and 0 or len 
-    for i=1, n*30, 30 do 
-        subtree:add_le(fields.addr_timestamp, tvb(i + offset, 4))
-        dissect_network_addr(tvb(i + offset + 4, 26), pinfo, subtree) 
+    local len, n = tofan(tvb, subtree)
+    local start = len 
+    for i=0, n-1 do 
+        subtree:add_le(fields.addr_timestamp, tvb(start, 4))
+        dissect_network_addr(tvb(start + 4, 26), pinfo, subtree) 
+        start = start + 30
     end
 end
 
 function dissect_out_point(tvb, tree) 
     local subtree = tree:add('OutPoint')
     subtree:add(fields.hash, tvb(0, 32))
-    subtree:add(fields.out_point_index, tvb(32, 4))
+    subtree:add_le(fields.out_point_index, tvb(32, 4))
+    return 36
 end
 
-function dissect_tx_in(tvb, tree) 
-    local subtree = tree:add('TxIn')
-    dissect_out_point(tvb(0, 36), subtree)
+function dissect_tx_in(tvb, tree, index) 
+    local subtree = tree:add('TxIn ' .. index)
+    local offset = dissect_out_point(tvb(0, 36), subtree)
     
-    local len, n = tofan(tvb(36), subtree)
-    local offset = len == 1 and 0 or len 
-    subtree:add(fields.tx_in_signature_script, tvb(36+offset+1, n)) 
-    subtree:add(fields.tx_in_sequence, tvb(36+offset+1+n, 4))
+    local len, n = tofan(tvb(offset), subtree)
+    offset = offset + len 
+    subtree:add(fields.tx_in_signature_script, tvb(offset, n)) 
+    subtree:add(fields.tx_in_sequence, tvb(offset + n, 4))
+    return offset + n + 4 
 end
 
-function dissect_tx(tvb, pinfo, tree)
-    local subtree = tree:add('Tx')
+function dissect_tx_out(tvb, tree, index) 
+    local subtree = tree:add('TxOut ' .. index)
+
+    subtree:add_le(fields.tx_out_value, tvb(0, 8))
+
+    local len, n = tofan(tvb(8), subtree)
+    subtree:add(fields.tx_out_script, tvb(8 + len, n)) 
+    return 8 + len + n
+end
+
+function dissect_tx(tvb, tree, index)
+    local subtree = tree:add('Tx ' .. index)
     subtree:add_le(fields.tx_version, tvb(0, 4))
+    local offset = 4
     local len, n = tofan(tvb(4), subtree)
-    local offset = len == 1 and 0 or len 
-    --for i=1, n*41, 41 do 
-        dissect_tx_in(tvb(1 + offset + 4), subtree) 
-        --dissect_tx_in(tvb(i + offset + 4, 26), pinfo, subtree) 
-    --end
+    offset = offset + len
+    for i=0, n-1 do 
+        offset = offset + dissect_tx_in(tvb(offset), subtree, i) 
+    end
+
+    len, n = tofan(tvb(offset), subtree)
+    offset = offset + len
+    for i = 0, n-1 do
+        offset = offset + dissect_tx_out(tvb(offset), subtree, i)
+    end
+
+    subtree:add(fields.tx_lock_time, tvb(offset, 4))
+    return offset + 4
 end
 
 msg_dissectors.block = function (tvb, pinfo, tree)
@@ -183,23 +192,11 @@ msg_dissectors.block = function (tvb, pinfo, tree)
     subtree:add_le(fields.block_difficulty, tvb(72, 4))
     subtree:add_le(fields.block_nonce, tvb(76, 4))
     
-    local tx_len, tx_count = var_int(tvb(80)) 
-    
-    if tx_len == 1 then
-        subtree:add(fields.tx_count_1, tvb(80, tx_len))
-    elseif tx_len == 2 then
-        subtree:add(fields.tx_count_2, tvb(81, tx_len))
-    elseif tx_len == 4 then
-        subtree:add(fields.tx_count_4, tvb(81, tx_len))
-    elseif tx_len == 8 then
-        subtree:add(fields.tx_count_8, tvb(81, tx_len))
-    else
-        assert(false)
-    end    
-
-    --cjg for i = 1 to tx_count*h
-    dissect_tx(tvb(80 + tx_len), pinfo, subtree) 
-
+    local len, count = tofan(tvb(80), subtree) 
+    local tx_start = 80 + len 
+    for i = 0, count-1 do
+        tx_start = tx_start + dissect_tx(tvb(tx_start), subtree, i) 
+    end
 end
 
 function dissect_header(tvb, pinfo, tree)
@@ -232,25 +229,13 @@ end
 msg_dissectors.getdata = function (tvb, pinfo, tree)
     pinfo.cols.info = 'getdata'
     
-    -- cjg extract method
-    local len, n = var_int(tvb)
-    if len == 1 then
-        tree:add(fields.var_int1, tvb(0, len))
-    elseif len == 2 then
-        tree:add(fields.var_int2, tvb(1, len))
-    elseif len == 4 then
-        tree:add(fields.var_int4, tvb(1, len))
-    elseif len == 8 then
-        tree:add(fields.var_int8, tvb(1, len))
-    else
-        assert(false)
-    end    
-
-    local offset = len == 1 and 0 or len 
+    local len, n = tofan(tvb, tree)
+    local offset = len 
     local subtree = tree:add("Inventory Vectors")
-    for i=1, n*36, 36 do 
-        subtree:add_le(fields.inv_type, tvb(i+offset, 4))
-        subtree:add(fields.hash, tvb(i+offset+4, 32))
+    for i=0, n-1 do 
+        subtree:add_le(fields.inv_type, tvb(offset, 4))
+        subtree:add(fields.hash, tvb(offset+4, 32))
+        offset = offset + 36
     end
 end
 
@@ -295,6 +280,10 @@ end
 
 msg_dissectors.sendcmpct = function (tvb, pinfo, tree)
     pinfo.cols.info = 'sendcmpct'
+end
+
+msg_dissectors.feefilter = function (tvb, pinfo, tree)
+    pinfo.cols.info = 'feefilter'
 end
 
 msg_dissectors.default = function(cmd, pinfo)
