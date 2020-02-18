@@ -19,8 +19,8 @@ fields.getheaders_version = ProtoField.uint32("bsv.getheaders.version", "Version
 
 fields.var_int1 = ProtoField.uint8("bsv.var_int_1", "var_int")
 fields.var_int2 = ProtoField.uint16("bsv.var_int_2", "var_int")
-fields.var_int3 = ProtoField.uint32("bsv.var_int_4", "var_int")
-fields.var_int4 = ProtoField.uint64("bsv.var_int_8", "var_int")
+fields.var_int4 = ProtoField.uint32("bsv.var_int_4", "var_int")
+fields.var_int8 = ProtoField.uint64("bsv.var_int_8", "var_int")
 
 fields.out_point_index = ProtoField.uint32("bsv.out_point.index", "Index")
 
@@ -70,7 +70,7 @@ function var_int(tvb)
     elseif n == 0xfe then 
         return 4, tvb(1, 4):le_uint()
     elseif n == 0xff then 
-        return 8, tvb(1, 8):le_uint()
+        return 8, tvb(1, 8):le_uint64()
     else
         assert(false)
     end
