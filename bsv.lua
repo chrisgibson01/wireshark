@@ -29,7 +29,8 @@ fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence")
 
 fields.tx_out_value = ProtoField.int64("bsv.tx_out.value", "Value")
 fields.tx_out_script = ProtoField.string("bsv.tx_out.script", "Public Key Script")
-fields.tx_lock_time = ProtoField.uint32("bsv.tx_out.lock_time", "Lock Time")
+fields.tx_lock_time = ProtoField.absolute_time("bsv.tx_out.lock_time", "Lock Time")
+fields.tx_lock_block = ProtoField.uint32("bsv.tx_out.lock_block", "Lock Time Block")
 
 fields.block_version = ProtoField.uint32("bsv.block.version", "Version")
 fields.block_prev_block = ProtoField.bytes("bsv.block.pre_block", "Prev Block")
@@ -177,7 +178,12 @@ function dissect_tx(tvb, tree, index)
         offset = offset + dissect_tx_out(tvb(offset), subtree, i)
     end
 
-    subtree:add(fields.tx_lock_time, tvb(offset, 4))
+    if tvb(offset, 4):le_uint() < 500000000 then
+        subtree:add_le(fields.tx_lock_block, tvb(offset, 4))
+    else
+        subtree:add_le(fields.tx_lock_time, tvb(offset, 4))
+    end
+
     return offset + 4
 end
 
