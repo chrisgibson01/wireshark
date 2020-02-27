@@ -152,6 +152,12 @@ function dissect_tx_in(tvb, tree, index)
     return offset + n + 4 
 end
 
+local opcodes = {
+    [0x76] = 'OP_DUP',
+    [0xac] = 'OP_CHECKSIG',
+    [0xb0] = 'OP_NOP1',
+    }
+
 function dissect_tx_out(tvb, tree, index) 
     local subtree = tree:add('TxOut ' .. index)
 
@@ -159,6 +165,15 @@ function dissect_tx_out(tvb, tree, index)
 
     local len, n = tofan(tvb(8), subtree)
     subtree:add(fields.tx_out_script, tvb(8 + len, n)) 
+
+    local bytes = tvb(8+len, n):bytes()
+    for i=0, n-1 do 
+        print(opcodes[bytes:get_index(i)])
+        print(bytes:get_index(i))
+        print('\n')
+    end
+
+
     return 8 + len + n
 end
 
