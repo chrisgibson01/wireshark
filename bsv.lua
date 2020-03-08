@@ -2,6 +2,154 @@
 
 bsv_protocol = Proto("BSV",  "Bitcoin SV Protocol")
 
+local opcode = 
+{
+    -- push value,
+    [0x00] = 'OP_0',
+    --[OP_0] = 'OP_FALSE ',
+    [0x4c] = 'OP_PUSHDATA1 ',
+    [0x4d] = 'OP_PUSHDATA2 ',
+    [0x4e] = 'OP_PUSHDATA4 ',
+    [0x4f] = 'OP_1NEGATE ',
+    [0x50] = 'OP_RESERVED ',
+    [0x51] = 'OP_1 ',
+    --[OP_1] = 'OP_TRUE ',
+    [0x52] = 'OP_2 ',
+    [0x53] = 'OP_3 ',
+    [0x54] = 'OP_4 ',
+    [0x55] = 'OP_5 ',
+    [0x56] = 'OP_6 ',
+    [0x57] = 'OP_7 ',
+    [0x58] = 'OP_8 ',
+    [0x59] = 'OP_9 ',
+    [0x5a] = 'OP_10 ',
+    [0x5b] = 'OP_11 ',
+    [0x5c] = 'OP_12 ',
+    [0x5d] = 'OP_13 ',
+    [0x5e] = 'OP_14 ',
+    [0x5f] = 'OP_15 ',
+    [0x60] = 'OP_16 ',
+
+    -- control,
+    [0x61] = 'OP_NOP ',
+    [0x62] = 'OP_VER ',
+    [0x63] = 'OP_IF ',
+    [0x64] = 'OP_NOTIF ',
+    [0x65] = 'OP_VERIF ',
+    [0x66] = 'OP_VERNOTIF ',
+    [0x67] = 'OP_ELSE ',
+    [0x68] = 'OP_ENDIF ',
+    [0x69] = 'OP_VERIFY ',
+    [0x6a] = 'OP_RETURN ',
+
+    -- stack ops',
+    [0x6b] = 'OP_TOALTSTACK ',
+    [0x6c] = 'OP_FROMALTSTACK ',
+    [0x6d] = 'OP_2DROP ',
+    [0x6e] = 'OP_2DUP ',
+    [0x6f] = 'OP_3DUP ',
+    [0x70] = 'OP_2OVER ',
+    [0x71] = 'OP_2ROT ',
+    [0x72] = 'OP_2SWAP ',
+    [0x73] = 'OP_IFDUP ',
+    [0x74] = 'OP_DEPTH ',
+    [0x75] = 'OP_DROP ',
+    [0x76] = 'OP_DUP ',
+    [0x77] = 'OP_NIP ',
+    [0x78] = 'OP_OVER ',
+    [0x79] = 'OP_PICK ',
+    [0x7a] = 'OP_ROLL ',
+    [0x7b] = 'OP_ROT ',
+    [0x7c] = 'OP_SWAP ',
+    [0x7d] = 'OP_TUCK ',
+
+    -- splice ops,
+    [0x7e] = 'OP_CAT ',
+    [0x7f] = '   -- after monolith upgrade (May 2018)OP_SPLIT ',
+    [0x80] = ' -- after monolith upgrade (May 2018)OP_NUM2BIN ',
+    [0x81] = ' -- after monolith upgrade (May 2018)OP_BIN2NUM ',
+    [0x82] = 'OP_SIZE ',
+
+    -- bit logic,
+    [0x83] = 'OP_INVERT ',
+    [0x84] = 'OP_AND ',
+    [0x85] = 'OP_OR ',
+    [0x86] = 'OP_XOR ',
+    [0x87] = 'OP_EQUAL ',
+    [0x88] = 'OP_EQUALVERIFY ',
+    [0x89] = 'OP_RESERVED1 ',
+    [0x8a] = 'OP_RESERVED2 ',
+
+    -- numeric',
+    [0x8b] = 'OP_1ADD ',
+    [0x8c] = 'OP_1SUB ',
+    [0x8d] = 'OP_2MUL ',
+    [0x8e] = 'OP_2DIV ',
+    [0x8f] = 'OP_NEGATE ',
+    [0x90] = 'OP_ABS ',
+    [0x91] = 'OP_NOT ',
+    [0x92] = 'OP_0NOTEQUAL ',
+
+    [0x93] = 'OP_ADD ',
+    [0x94] = 'OP_SUB ',
+    [0x95] = 'OP_MUL ',
+    [0x96] = 'OP_DIV ',
+    [0x97] = 'OP_MOD ',
+    [0x98] = 'OP_LSHIFT ',
+    [0x99] = 'OP_RSHIFT ',
+
+    [0x9a] = 'OP_BOOLAND ',
+    [0x9b] = 'OP_BOOLOR ',
+    [0x9c] = 'OP_NUMEQUAL ',
+    [0x9d] = 'OP_NUMEQUALVERIFY ',
+    [0x9e] = 'OP_NUMNOTEQUAL ',
+    [0x9f] = 'OP_LESSTHAN ',
+    [0xa0] = 'OP_GREATERTHAN ',
+    [0xa1] = 'OP_LESSTHANOREQUAL ',
+    [0xa2] = 'OP_GREATERTHANOREQUAL ',
+    [0xa3] = 'OP_MIN ',
+    [0xa4] = 'OP_MAX ',
+
+    [0xa5] = 'OP_WITHIN ',
+
+    -- crypto',
+    [0xa6] = 'OP_RIPEMD160 ',
+    [0xa7] = 'OP_SHA1 ',
+    [0xa8] = 'OP_SHA256 ',
+    [0xa9] = 'OP_HASH160 ',
+    [0xaa] = 'OP_HASH256 ',
+    [0xab] = 'OP_CODESEPARATOR ',
+    [0xac] = 'OP_CHECKSIG ',
+    [0xad] = 'OP_CHECKSIGVERIFY ',
+    [0xae] = 'OP_CHECKMULTISIG ',
+    [0xaf] = 'OP_CHECKMULTISIGVERIFY ',
+
+    -- expansion',
+    [0xb0] = 'OP_NOP1 ',
+    [0xb1] = 'OP_CHECKLOCKTIMEVERIFY ',
+    --[OP_CHECKLOCKTIMEVERIFY] = 'OP_NOP2 ',
+    [0xb2] = 'OP_CHECKSEQUENCEVERIFY ',
+    --[OP_CHECKSEQUENCEVERIFY] = 'OP_NOP3 ',
+    [0xb3] = 'OP_NOP4 ',
+    [0xb4] = 'OP_NOP5 ',
+    [0xb5] = 'OP_NOP6 ',
+    [0xb6] = 'OP_NOP7 ',
+    [0xb7] = 'OP_NOP8 ',
+    [0xb8] = 'OP_NOP9 ',
+    [0xb9] = 'OP_NOP10 ',
+
+    -- The first op_code value after all defined opcodes',
+    --[FIRST_UNDEFINED_]OP_VALUE',
+
+    -- template matching params',
+    [0xfa] = 'OP_SMALLINTEGER ',
+    [0xfb] = 'OP_PUBKEYS ',
+    [0xfd] = 'OP_PUBKEYHASH ',
+    [0xfe] = 'OP_PUBKEY ',
+
+    [0xff] = 'OP_INVALIDOPCODE ',
+}
+
 local fields = {}
 
 fields.ping_nonce = ProtoField.uint64("bsv.ping.nonce", "Random Nonce")
@@ -28,7 +176,7 @@ fields.tx_in_signature_script = ProtoField.string("bsv.tx_in_signature_script", 
 fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence")
 
 fields.tx_out_value = ProtoField.int64("bsv.tx_out.value", "Value")
-fields.tx_out_script = ProtoField.string("bsv.tx_out.script", "Public Key Script")
+fields.tx_out_script = ProtoField.uint8("bsv.tx_out.script", "Public Key Script", base.HEX, opcode)
 fields.tx_lock_time = ProtoField.absolute_time("bsv.tx_out.lock_time", "Lock Time")
 fields.tx_lock_block = ProtoField.uint32("bsv.tx_out.lock_block", "Lock Time Block")
 
@@ -152,26 +300,29 @@ function dissect_tx_in(tvb, tree, index)
     return offset + n + 4 
 end
 
-local opcodes = {
-    [0x76] = 'OP_DUP',
-    [0xac] = 'OP_CHECKSIG',
-    [0xb0] = 'OP_NOP1',
-    }
-
 function dissect_tx_out(tvb, tree, index) 
     local subtree = tree:add('TxOut ' .. index)
 
     subtree:add_le(fields.tx_out_value, tvb(0, 8))
 
     local len, n = tofan(tvb(8), subtree)
-    subtree:add(fields.tx_out_script, tvb(8 + len, n)) 
+    --subtree:add(fields.tx_out_script, tvb(8 + len, n)) 
 
-    local bytes = tvb(8+len, n):bytes()
+    --local bytes = tvb(8+len, n):bytes()
+    local offset = 8 + len
     for i=0, n-1 do 
-        print(opcodes[bytes:get_index(i)])
-        print(bytes:get_index(i))
-        print('\n')
+        subtree:add(fields.tx_out_script, tvb(offset+i, 1)) 
+
+--        local x = opcode[bytes:get_index(i)]
+--        if x ~= nil then
+--            print(x)
+--            --subtree:add(x)
+--        else
+--            print(i)
+--        end
+        --print(opcode[bytes:get_index(i)])
     end
+    print('\n')
 
 
     return 8 + len + n
