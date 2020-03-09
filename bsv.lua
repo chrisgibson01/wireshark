@@ -172,7 +172,7 @@ fields.var_int2 = ProtoField.uint16("bsv.var_int_2", "var_int")
 fields.var_int4 = ProtoField.uint32("bsv.var_int_4", "var_int")
 fields.var_int8 = ProtoField.uint64("bsv.var_int_8", "var_int")
 
-fields.out_point_index = ProtoField.uint32("bsv.out_point.index", "Index")
+fields.out_point_index = ProtoField.uint32("bsv.out_point.index", "Index", base.HEX)
 
 fields.tx_in_signature_script = ProtoField.string("bsv.tx_in_signature_script", "Signature Script")
 fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence", base.HEX)
@@ -292,37 +292,45 @@ function dissect_out_point(tvb, tree)
     return 36
 end
 
+function dissect_script(tvb, tree)
+    local len, n = tofan(tvb, tree)
+    local offset = len
+    while offset < len + n do 
+
+        local opcode = tvb(offset, 1):uint()
+        if opcode <= 75 and opcode >= 1 then
+            tree:add(fields.tx_out_data, tvb(offset+1, opcode)) 
+            offset = offset + 1 + opcode
+        else
+            tree:add(fields.tx_out_script, tvb(offset, 1)) 
+            offset = offset + 1
+        end
+    end
+    return len + n
+end
+
 function dissect_tx_in(tvb, tree, index) 
     local subtree = tree:add('TxIn ' .. index)
     local offset = dissect_out_point(tvb(0, 36), subtree)
     
-    local len, n = tofan(tvb(offset), subtree)
-    offset = offset + len 
-    subtree:add(fields.tx_in_signature_script, tvb(offset, n)) 
-    subtree:add(fields.tx_in_sequence, tvb(offset + n, 4))
-    return offset + n + 4 
-end
+    local sig_tree = subtree:add('Signature Script')
+    local tmp =  dissect_script(tvb(36), sig_tree)
+    offset = offset + tmp
+    --offset = offset + dissect_script(tvb(36), sig_tree)
 
+    subtree:add(fields.tx_in_sequence, tvb(offset, 4))
+    return offset + 4 
+end
+    
 function dissect_tx_out(tvb, tree, index) 
     local subtree = tree:add('TxOut ' .. index)
 
     subtree:add_le(fields.tx_out_value, tvb(0, 8))
 
-    local len, n = tofan(tvb(8), subtree)
-    local offset = 8 + len
-    while offset < 8 + len + n do 
+    local pub_key_tree = subtree:add('Script Pub Key')
 
-        local opcode = tvb(offset, 1):uint()
-        if opcode <= 75 and opcode >= 1 then
-            subtree:add(fields.tx_out_data, tvb(offset+1, opcode)) 
-            offset = offset + 1 + opcode
-        else
-            subtree:add(fields.tx_out_script, tvb(offset, 1)) 
-            offset = offset + 1
-        end
-    end
-
-    return 8 + len + n
+    local n = dissect_script(tvb(8), pub_key_tree)
+    return 8 + n
 end
 
 function dissect_tx(tvb, tree, index)
