@@ -175,7 +175,7 @@ fields.var_int8 = ProtoField.uint64("bsv.var_int_8", "var_int")
 fields.out_point_index = ProtoField.uint32("bsv.out_point.index", "Index")
 
 fields.tx_in_signature_script = ProtoField.string("bsv.tx_in_signature_script", "Signature Script")
-fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence")
+fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence", base.HEX)
 
 fields.tx_out_value = ProtoField.int64("bsv.tx_out.value", "Value")
 fields.tx_out_script = ProtoField.uint8("bsv.tx_out.script", " ", base.HEX, opcode)
