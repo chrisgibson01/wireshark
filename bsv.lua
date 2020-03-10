@@ -175,6 +175,10 @@ fields.var_int8 = ProtoField.uint64("bsv.var_int_8", "var_int")
 fields.out_point_index = ProtoField.uint32("bsv.out_point.index", "Index", base.HEX)
 
 fields.tx_in_signature_script = ProtoField.string("bsv.tx_in_signature_script", "Signature Script")
+fields.tx_in_block_height = ProtoField.uint32("bsv.tx_in_block_height", "Block Height")
+fields.tx_in_extra_nonce = ProtoField.uint32("bsv.tx_in_extra_nonce", "Extra Nonce")
+fields.tx_in_miner_data = ProtoField.string("bsv.tx_in_miner_data", "Miner Data")
+
 fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence", base.HEX)
 
 fields.tx_out_value = ProtoField.int64("bsv.tx_out.value", "Value")
@@ -309,6 +313,33 @@ function dissect_script(tvb, tree)
     return len + n
 end
 
+function dissect_coinbase_tx_in(tvb, pinfo, tree)
+    local subtree = tree:add('TxIn 0 (Coinbase)' )
+    local offset = dissect_out_point(tvb(0, 36), subtree)
+    
+    local len, n = dissect_var_int(tvb(offset), tree)
+    offset = offset + len
+    local opcode = tvb(offset, 1):uint() -- cjg var_int?
+    assert(opcode <=75)
+    assert(opcode >=1)
+    offset = offset + 1
+
+    local block_height = tvb(offset, opcode):le_int()
+    --pinfo.cols.info = block_height
+    local x = tostring(pinfo.cols.info)
+    local y = x .. ' ' .. tostring(block_height)
+    pinfo.cols.info = y
+    --pinfo.cols['info'] = pinfo.cols['info'] .. tostring(block_height)
+
+    tree:add_le(fields.tx_in_block_height, tvb(offset, opcode)) 
+    offset = offset + opcode
+    tree:add(fields.tx_in_extra_nonce, tvb(offset, 4))
+    offset = offset + 4
+    tree:add(fields.tx_in_miner_data, tvb(offset, n - 4))
+    
+    return 41 + n 
+end
+
 function dissect_tx_in(tvb, tree, index) 
     local subtree = tree:add('TxIn ' .. index)
     local offset = dissect_out_point(tvb(0, 36), subtree)
@@ -333,14 +364,22 @@ function dissect_tx_out(tvb, tree, index)
     return 8 + n
 end
 
-function dissect_tx(tvb, tree, index)
+function dissect_tx(tvb, pinfo, tree, index)
     local subtree = tree:add('Tx ' .. index)
     subtree:add_le(fields.tx_version, tvb(0, 4))
     local offset = 4
     local len, n = dissect_var_int(tvb(4), subtree)
     offset = offset + len
-    for i=0, n-1 do 
-        offset = offset + dissect_tx_in(tvb(offset), subtree, i) 
+
+    if index == 0 then
+        offset = offset + dissect_coinbase_tx_in(tvb(offset), pinfo, subtree) 
+        for i=1, n-1 do 
+            offset = offset + dissect_tx_in(tvb(offset), subtree, i) 
+        end
+    else
+        for i=0, n-1 do 
+            offset = offset + dissect_tx_in(tvb(offset), subtree, i) 
+        end
     end
 
     len, n = dissect_var_int(tvb(offset), subtree)
@@ -372,7 +411,7 @@ msg_dissectors.block = function (tvb, pinfo, tree)
     local len, count = dissect_var_int(tvb(80), subtree) 
     local tx_start = 80 + len 
     for i = 0, count-1 do
-        tx_start = tx_start + dissect_tx(tvb(tx_start), subtree, i) 
+        tx_start = tx_start + dissect_tx(tvb(tx_start), pinfo, subtree, i) 
     end
 end
 
