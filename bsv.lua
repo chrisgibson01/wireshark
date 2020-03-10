@@ -228,7 +228,7 @@ function var_int(tvb)
     end
 end
 
-function tofan(tvb, tree)
+function dissect_var_int(tvb, tree)
     local len, n = var_int(tvb)
     if len == 1 then
         tree:add(fields.var_int1, tvb(0, len))
@@ -276,7 +276,7 @@ msg_dissectors.addr = function(tvb, pinfo, tree)
 
     local subtree = tree:add('addr')
     
-    local len, n = tofan(tvb, subtree)
+    local len, n = dissect_var_int(tvb, subtree)
     local start = len 
     for i=0, n-1 do 
         subtree:add_le(fields.addr_timestamp, tvb(start, 4))
@@ -293,7 +293,7 @@ function dissect_out_point(tvb, tree)
 end
 
 function dissect_script(tvb, tree)
-    local len, n = tofan(tvb, tree)
+    local len, n = dissect_var_int(tvb, tree)
     local offset = len
     while offset < len + n do 
 
@@ -337,13 +337,13 @@ function dissect_tx(tvb, tree, index)
     local subtree = tree:add('Tx ' .. index)
     subtree:add_le(fields.tx_version, tvb(0, 4))
     local offset = 4
-    local len, n = tofan(tvb(4), subtree)
+    local len, n = dissect_var_int(tvb(4), subtree)
     offset = offset + len
     for i=0, n-1 do 
         offset = offset + dissect_tx_in(tvb(offset), subtree, i) 
     end
 
-    len, n = tofan(tvb(offset), subtree)
+    len, n = dissect_var_int(tvb(offset), subtree)
     offset = offset + len
     for i = 0, n-1 do
         offset = offset + dissect_tx_out(tvb(offset), subtree, i)
@@ -369,7 +369,7 @@ msg_dissectors.block = function (tvb, pinfo, tree)
     subtree:add_le(fields.block_difficulty, tvb(72, 4))
     subtree:add_le(fields.block_nonce, tvb(76, 4))
     
-    local len, count = tofan(tvb(80), subtree) 
+    local len, count = dissect_var_int(tvb(80), subtree) 
     local tx_start = 80 + len 
     for i = 0, count-1 do
         tx_start = tx_start + dissect_tx(tvb(tx_start), subtree, i) 
@@ -406,7 +406,7 @@ end
 msg_dissectors.getdata = function (tvb, pinfo, tree)
     pinfo.cols.info = 'getdata'
     
-    local len, n = tofan(tvb, tree)
+    local len, n = dissect_var_int(tvb, tree)
     local offset = len 
     local subtree = tree:add("Inventory Vectors")
     for i=0, n-1 do 
