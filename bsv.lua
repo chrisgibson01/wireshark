@@ -325,11 +325,7 @@ function dissect_coinbase_tx_in(tvb, pinfo, tree)
     offset = offset + 1
 
     local block_height = tvb(offset, opcode):le_int()
-    --pinfo.cols.info = block_height
-    local x = tostring(pinfo.cols.info)
-    local y = x .. ' ' .. tostring(block_height)
-    pinfo.cols.info = y
-    --pinfo.cols['info'] = pinfo.cols['info'] .. tostring(block_height)
+    pinfo.cols.info:append(' ' .. tostring(block_height))
 
     tree:add_le(fields.tx_in_block_height, tvb(offset, opcode)) 
     offset = offset + opcode
