@@ -314,12 +314,14 @@ function dissect_script(tvb, tree)
 end
 
 function dissect_coinbase_tx_in(tvb, pinfo, tree)
-    local subtree = tree:add('TxIn 0 (Coinbase)' )
+    local subtree = tree:add('TxIn 0' )
     local offset = dissect_out_point(tvb(0, 36), subtree)
     
-    local len, n = dissect_var_int(tvb(offset), tree)
+    local cbtree = subtree:add('Coinbase Data')
+    
+    local len, n = dissect_var_int(tvb(offset), cbtree)
     offset = offset + len
-    local opcode = tvb(offset, 1):uint() -- cjg var_int?
+    local opcode = tvb(offset, 1):uint()
     assert(opcode <=75)
     assert(opcode >=1)
     offset = offset + 1
@@ -327,11 +329,12 @@ function dissect_coinbase_tx_in(tvb, pinfo, tree)
     local block_height = tvb(offset, opcode):le_int()
     pinfo.cols.info:append(' ' .. tostring(block_height))
 
-    tree:add_le(fields.tx_in_block_height, tvb(offset, opcode)) 
+    cbtree:add_le(fields.tx_in_block_height, tvb(offset, opcode)) 
     offset = offset + opcode
-    tree:add(fields.tx_in_extra_nonce, tvb(offset, 4))
+    local extra_nonce_len = 4
+    cbtree:add(fields.tx_in_extra_nonce, tvb(offset,  extra_nonce_len))
     offset = offset + 4
-    tree:add(fields.tx_in_miner_data, tvb(offset, n - 4))
+    cbtree:add(fields.tx_in_miner_data, tvb(offset, n - len - opcode - extra_nonce_len ))
     
     return 41 + n 
 end
