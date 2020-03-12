@@ -313,18 +313,14 @@ function dissect_script(tvb, tree)
     return len + n
 end
 
-function dissect_coinbase_tx_in(tvb, pinfo, tree)
-    local subtree = tree:add('TxIn 0' )
-    local offset = dissect_out_point(tvb(0, 36), subtree)
-    
-    local cbtree = subtree:add('Coinbase Data')
+function dissect_coinbase_data(tvb, pinfo, tree)
+    local cbtree = tree:add('Coinbase Data')
     
     local len, n = dissect_var_int(tvb(offset), cbtree)
-    offset = offset + len
-    local opcode = tvb(offset, 1):uint()
+    local opcode = tvb(len, 1):uint()
     assert(opcode <=75)
     assert(opcode >=1)
-    offset = offset + 1
+    local offset = len + 1
 
     local block_height = tvb(offset, opcode):le_int()
     pinfo.cols.info:append(' ' .. tostring(block_height))
@@ -333,20 +329,28 @@ function dissect_coinbase_tx_in(tvb, pinfo, tree)
     offset = offset + opcode
     local extra_nonce_len = 4
     cbtree:add(fields.tx_in_extra_nonce, tvb(offset,  extra_nonce_len))
-    offset = offset + 4
-    cbtree:add(fields.tx_in_miner_data, tvb(offset, n - len - opcode - extra_nonce_len ))
+    offset = offset + extra_nonce_len
+    local string_len = n - len - opcode -extra_nonce_len
+    cbtree:add(fields.tx_in_miner_data, tvb(offset, string_len))
     
-    return 41 + n 
+    return len + n
 end
 
-function dissect_tx_in(tvb, tree, index) 
+function tofan(tvb, pinfo, tree)
+    local subtree = tree:add('Signature Script')
+    local tmp =  dissect_script(tvb, subtree)
+    return tmp
+end
+
+function dissect_tx_in(tvb, pinfo, tree, index) 
     local subtree = tree:add('TxIn ' .. index)
     local offset = dissect_out_point(tvb(0, 36), subtree)
     
-    local sig_tree = subtree:add('Signature Script')
-    local tmp =  dissect_script(tvb(36), sig_tree)
-    offset = offset + tmp
-    --offset = offset + dissect_script(tvb(36), sig_tree)
+    if index == 0 then
+        offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree) 
+    else
+        offset = offset + tofan(tvb(offset), pinfo, subtree)
+    end
 
     subtree:add(fields.tx_in_sequence, tvb(offset, 4))
     return offset + 4 
@@ -370,15 +374,8 @@ function dissect_tx(tvb, pinfo, tree, index)
     local len, n = dissect_var_int(tvb(4), subtree)
     offset = offset + len
 
-    if index == 0 then
-        offset = offset + dissect_coinbase_tx_in(tvb(offset), pinfo, subtree) 
-        for i=1, n-1 do 
-            offset = offset + dissect_tx_in(tvb(offset), subtree, i) 
-        end
-    else
-        for i=0, n-1 do 
-            offset = offset + dissect_tx_in(tvb(offset), subtree, i) 
-        end
+    for i=0, n-1 do 
+        offset = offset + dissect_tx_in(tvb(offset), pinfo, subtree, index) 
     end
 
     len, n = dissect_var_int(tvb(offset), subtree)
