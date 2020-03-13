@@ -176,7 +176,7 @@ fields.out_point_index = ProtoField.uint32("bsv.out_point.index", "Index", base.
 
 fields.tx_in_signature_script = ProtoField.string("bsv.tx_in_signature_script", "Signature Script")
 fields.tx_in_block_height = ProtoField.uint32("bsv.tx_in_block_height", "Block Height")
-fields.tx_in_extra_nonce = ProtoField.uint32("bsv.tx_in_extra_nonce", "Extra Nonce")
+fields.tx_in_extra_nonce = ProtoField.bytes("bsv.tx_in_extra_nonce", "Extra Nonce")
 fields.tx_in_miner_data = ProtoField.string("bsv.tx_in_miner_data", "Miner Data")
 
 fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence", base.HEX)
@@ -322,16 +322,18 @@ function dissect_coinbase_data(tvb, pinfo, tree)
     assert(opcode >=1)
     local offset = len + 1
 
+    -- BIP-34 specifies block height in > version 2
     local block_height = tvb(offset, opcode):le_int()
     pinfo.cols.info:append(' ' .. tostring(block_height))
-
     cbtree:add_le(fields.tx_in_block_height, tvb(offset, opcode)) 
     offset = offset + opcode
-    local extra_nonce_len = 4
-    cbtree:add(fields.tx_in_extra_nonce, tvb(offset,  extra_nonce_len))
-    offset = offset + extra_nonce_len
-    local string_len = n - len - opcode -extra_nonce_len
-    cbtree:add(fields.tx_in_miner_data, tvb(offset, string_len))
+
+    while offset < n do
+        local extra_nonce_len = tvb(offset, 1):uint()
+        offset = offset + 1
+        cbtree:add(fields.tx_in_extra_nonce, tvb(offset,  extra_nonce_len))
+        offset = offset + extra_nonce_len
+    end
     
     return len + n
 end
