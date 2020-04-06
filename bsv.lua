@@ -232,7 +232,7 @@ function var_int(tvb)
     end
 end
 
-function dissect_var_int(tvb, tree)
+function dissect_var_int(tvb, tree) -- cjg rename this adds a var_int to a tree
     local len, n = var_int(tvb)
     if len == 1 then
         tree:add(fields.var_int1, tvb(0, len))
@@ -458,16 +458,15 @@ msg_dissectors.getheaders = function(tvb, pinfo, tree)
 
     local subtree = tree:add("getheaders")
     subtree:add_le(fields.getheaders_version, tvb(0, 4)) 
-    local len, n  = var_int(tvb(4))
-    subtree:add(fields.var_int1, tvb(4, len))
-
-    local count = tvb(4, len):uint()
-    for i=1, count*32, 32 do
-        subtree:add(fields.hash, tvb(4 + i, 32))
+    local len, n  = dissect_var_int(tvb(4), subtree)
+    local offset = 4 + len
+    for i=0, n-1 do
+        subtree:add(fields.hash, tvb(offset, 32))
+        offset = offset + 32
     end
     
-    -- hash stop cjg
-    subtree:add(fields.hash, tvb(5 + (count*32), 32))
+    -- hash stop 
+    subtree:add(fields.hash, tvb(offset, 32))
 end
 
 msg_dissectors.headers = function(tvb, pinfo, tree) 
@@ -476,6 +475,7 @@ msg_dissectors.headers = function(tvb, pinfo, tree)
     local subtree = tree:add("headers")
     local len, n = var_int(tvb)
     subtree:add_le(fields.var_int2, tvb(1, len))
+
     
 end
 
