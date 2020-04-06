@@ -161,7 +161,6 @@ fields.magic = ProtoField.uint32("bsv.header.magic", "Magic", base.HEX)
 fields.cmd = ProtoField.string("bsv.header.cmd", "Command")
 fields.length = ProtoField.uint32("bsv.header.length", "Length")
 fields.checksum = ProtoField.bytes("bsv.header.checksum", "Checksum")
-fields.inv_count = ProtoField.uint8("bsv.inv.count", "Count")
 fields.inv_type = ProtoField.uint32("bsv.inv.type", "Type")
 fields.hash = ProtoField.bytes("bsv.hash", "Hash")
 
@@ -429,14 +428,17 @@ end
 
 msg_dissectors.inv = function (tvb, pinfo, tree)
     pinfo.cols.info = 'inv'
-
-    local count = var_int(tvb) 
-    tree:add(fields.inv_count, tvb(0, 1))
-
+    
     local subtree = tree:add("Inventory Vectors")
-    for i=1, count*36, 36 do 
-        subtree:add_le(fields.inv_type, tvb(i, 4))
-        subtree:add(fields.hash, tvb(i+4, 32))
+
+    local len, n = dissect_var_int(tvb, subtree) 
+
+    local offset = len
+    for i=0, n-1 do 
+        subtree:add_le(fields.inv_type, tvb(offset, 4))
+        offset = offset + 4
+        subtree:add(fields.hash, tvb(offset, 32))
+        offset = offset + 32
     end
 end
 
