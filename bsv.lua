@@ -337,7 +337,7 @@ function dissect_coinbase_data(tvb, pinfo, tree)
     return len + n
 end
 
-function tofan(tvb, pinfo, tree)
+function dissect_sig_script(tvb, pinfo, tree)
     local subtree = tree:add('Signature Script')
     local tmp =  dissect_script(tvb, subtree)
     return tmp
@@ -350,7 +350,7 @@ function dissect_tx_in(tvb, pinfo, tree, index)
     if index == 0 then
         offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree) 
     else
-        offset = offset + tofan(tvb(offset), pinfo, subtree)
+        offset = offset + dissect_sig_script(tvb(offset), pinfo, subtree)
     end
 
     subtree:add(fields.tx_in_sequence, tvb(offset, 4))
