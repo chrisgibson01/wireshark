@@ -474,10 +474,27 @@ end
 msg_dissectors.headers = function(tvb, pinfo, tree) 
     pinfo.cols.info = 'headers'
 
-    local subtree = tree:add("headers")
-    local len, n = var_int(tvb)
-    subtree:add_le(fields.var_int2, tvb(1, len))
-
+    local subtree = tree:add("Block Headers")
+    local len, n = dissect_var_int(tvb, subtree)
+    
+    local offset = len
+    for i=0, n-1 do
+        local blockTree = subtree:add('Block Header: ' .. i)
+        blockTree:add(fields.block_version, tvb(offset, 4))
+        offset = offset + 4 
+        blockTree:add(fields.block_prev_block, tvb(offset, 32))
+        offset = offset + 32
+        blockTree:add(fields.block_merkle_root, tvb(offset, 32))
+        offset = offset + 32
+        blockTree:add_le(fields.block_timestamp, tvb(offset, 4))
+        offset = offset + 4
+        blockTree:add_le(fields.block_difficulty, tvb(offset, 4))
+        offset = offset + 4
+        blockTree:add_le(fields.block_nonce, tvb(offset, 4))
+        offset = offset + 4
+        local len = dissect_var_int(tvb(offset), blockTree)
+        offset = offset + len
+    end
     
 end
 
