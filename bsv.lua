@@ -316,13 +316,15 @@ function dissect_coinbase_data(tvb, pinfo, tree, block_version)
     local subtree = tree:add('Coinbase Data')
     
     local len, n = dissect_var_int(tvb(offset), subtree)
-    local opcode = tvb(len, 1):uint()
-    assert(opcode <=75)
-    assert(opcode >=1)
 
     if block_version >= 2 then
         -- BIP-34 specifies block height in block.version >= 2
-        local offset = len + 1
+        local offset = len 
+        local opcode = tvb(len, 1):uint()
+        assert(opcode <=75)
+        assert(opcode >=1)
+        offset = offset + 1
+
         local block_height = tvb(offset, opcode):le_int()
         pinfo.cols.info:append(' ' .. tostring(block_height))
         subtree:add_le(fields.tx_in_block_height, tvb(offset, opcode)) 
