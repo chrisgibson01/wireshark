@@ -1,0 +1,13 @@
+digraph
+{
+    wireshark -> tshark;
+    wireshark -> dissectors;
+    dissectors -> builtin;
+    builtin -> bitcoin;
+    builtin -> "...";
+    dissectors -> user;
+    user -> lua;
+    lua -> bsv;
+    user -> c;
+}
+
