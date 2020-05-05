@@ -1,5 +1,14 @@
 tshark -i eth0 -X lua_script:bsv.lua -Y bsv -O bsv
 
+Setup
+-----
+/etc/wireshark/init.lua
+    disable_lua = false
+    run_user_scripts_when_superuser = true
+
+    -- if running_superuser then
+    if false then
+
 Tips
 ----
 To search for a message with a specific hash:
@@ -8,3 +17,4 @@ To search for a message with a specific hash:
 
     e.g.
     bsv contians 49:c2:f7:c3
+
