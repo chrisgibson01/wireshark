@@ -7,7 +7,7 @@ local opcode =
     -- push value,
     [0x0] = 'OP_0',
     [0x0] = 'OP_FALSE',
-
+    
     [0x4c] = 'OP_PUSHDATA1',
     [0x4d] = 'OP_PUSHDATA2',
     [0x4e] = 'OP_PUSHDATA4',
@@ -152,6 +152,10 @@ local opcode =
     [0xff] = 'OP_INVALIDOPCODE',
 }
 
+for i = 0x1, 0x4b do
+    opcode[i] = 'Data Length'
+end
+
 local fields = {}
 
 fields.ping_nonce = ProtoField.uint64("bsv.ping.nonce", "Random Nonce")
@@ -173,7 +177,6 @@ fields.var_int8 = ProtoField.uint64("bsv.var_int_8", "var_int")
 
 fields.out_point_index = ProtoField.uint32("bsv.out_point.index", "Index", base.HEX)
 
-fields.tx_in_signature_script = ProtoField.string("bsv.tx_in_signature_script", "Signature Script")
 fields.tx_in_block_height = ProtoField.uint32("bsv.tx_in_block_height", "Block Height")
 fields.tx_in_extra_nonce = ProtoField.bytes("bsv.tx_in_extra_nonce", "Extra Nonce")
 fields.tx_in_miner_data = ProtoField.string("bsv.tx_in_miner_data", "Miner Data")
@@ -181,7 +184,7 @@ fields.tx_in_miner_data = ProtoField.string("bsv.tx_in_miner_data", "Miner Data"
 fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence", base.HEX)
 
 fields.tx_out_value = ProtoField.int64("bsv.tx_out.value", "Value")
-fields.tx_out_script = ProtoField.uint8("bsv.tx_out.script", " ", base.HEX, opcode)
+fields.tx_out_opcode = ProtoField.uint8("bsv.tx_out.script", "Opcode", base.HEX, opcode)
 fields.tx_out_data = ProtoField.bytes("bsv.tx_out.data", "Data")
 fields.tx_lock_time = ProtoField.absolute_time("bsv.tx_out.lock_time", "Lock Time")
 fields.tx_lock_block = ProtoField.uint32("bsv.tx_out.lock_block", "Lock Time Block")
@@ -302,10 +305,12 @@ function dissect_script(tvb, tree)
 
         local opcode = tvb(offset, 1):uint()
         if opcode <= 75 and opcode >= 1 then
-            tree:add(fields.tx_out_data, tvb(offset+1, opcode)) 
-            offset = offset + 1 + opcode
+            tree:add(fields.tx_out_opcode, tvb(offset, 1)) 
+            offset = offset + 1  
+            tree:add(fields.tx_out_data, tvb(offset, opcode)) 
+            offset = offset + opcode
         else
-            tree:add(fields.tx_out_script, tvb(offset, 1)) 
+            tree:add(fields.tx_out_opcode, tvb(offset, 1)) 
             offset = offset + 1
         end
     end
@@ -320,7 +325,8 @@ function dissect_coinbase_data(tvb, pinfo, tree, block_version)
     if block_version >= 2 then
         -- BIP-34 specifies block height in block.version >= 2
         local offset = len 
-        local opcode = tvb(len, 1):uint()
+        subtree:add(fields.tx_out_opcode, tvb(offset, 1)) 
+        local opcode = tvb(offset, 1):uint()
         assert(opcode <=75)
         assert(opcode >=1)
         offset = offset + 1
@@ -342,10 +348,9 @@ function dissect_coinbase_data(tvb, pinfo, tree, block_version)
     return len + n
 end
 
-function dissect_sig_script(tvb, pinfo, tree)
-    local subtree = tree:add('Signature Script')
-    local tmp =  dissect_script(tvb, subtree)
-    return tmp
+function dissect_unlocking_script(tvb, pinfo, tree)
+    local subtree = tree:add('Unlocking Script')
+    return dissect_script(tvb, subtree)
 end
 
 function dissect_tx_in(tvb, pinfo, tree, index, block_version) 
@@ -355,7 +360,7 @@ function dissect_tx_in(tvb, pinfo, tree, index, block_version)
     if index == 0 then
         offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree, block_version) 
     else
-        offset = offset + dissect_sig_script(tvb(offset), pinfo, subtree)
+        offset = offset + dissect_unlocking_script(tvb(offset), pinfo, subtree)
     end
 
     subtree:add(fields.tx_in_sequence, tvb(offset, 4))
@@ -367,7 +372,7 @@ function dissect_tx_out(tvb, tree, index)
 
     subtree:add_le(fields.tx_out_value, tvb(0, 8))
 
-    local pub_key_tree = subtree:add('Script Pub Key')
+    local pub_key_tree = subtree:add('Locking script')
 
     local n = dissect_script(tvb(8), pub_key_tree)
     return 8 + n
