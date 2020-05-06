@@ -7,7 +7,7 @@ local opcode =
     -- push value,
     [0x0] = 'OP_0',
     [0x0] = 'OP_FALSE',
-
+    
     [0x4c] = 'OP_PUSHDATA1',
     [0x4d] = 'OP_PUSHDATA2',
     [0x4e] = 'OP_PUSHDATA4',
@@ -152,6 +152,10 @@ local opcode =
     [0xff] = 'OP_INVALIDOPCODE',
 }
 
+for i = 0x1, 0x4b do
+    opcode[i] = 'Data Length'
+end
+
 local fields = {}
 
 fields.ping_nonce = ProtoField.uint64("bsv.ping.nonce", "Random Nonce")
@@ -180,7 +184,7 @@ fields.tx_in_miner_data = ProtoField.string("bsv.tx_in_miner_data", "Miner Data"
 fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence", base.HEX)
 
 fields.tx_out_value = ProtoField.int64("bsv.tx_out.value", "Value")
-fields.tx_out_script = ProtoField.uint8("bsv.tx_out.script", " ", base.HEX, opcode)
+fields.tx_out_opcode = ProtoField.uint8("bsv.tx_out.script", "Opcode", base.HEX, opcode)
 fields.tx_out_data = ProtoField.bytes("bsv.tx_out.data", "Data")
 fields.tx_lock_time = ProtoField.absolute_time("bsv.tx_out.lock_time", "Lock Time")
 fields.tx_lock_block = ProtoField.uint32("bsv.tx_out.lock_block", "Lock Time Block")
@@ -301,10 +305,12 @@ function dissect_script(tvb, tree)
 
         local opcode = tvb(offset, 1):uint()
         if opcode <= 75 and opcode >= 1 then
-            tree:add(fields.tx_out_data, tvb(offset+1, opcode)) 
-            offset = offset + 1 + opcode
+            tree:add(fields.tx_out_opcode, tvb(offset, 1)) 
+            offset = offset + 1  
+            tree:add(fields.tx_out_data, tvb(offset, opcode)) 
+            offset = offset + opcode
         else
-            tree:add(fields.tx_out_script, tvb(offset, 1)) 
+            tree:add(fields.tx_out_opcode, tvb(offset, 1)) 
             offset = offset + 1
         end
     end
@@ -319,7 +325,8 @@ function dissect_coinbase_data(tvb, pinfo, tree, block_version)
     if block_version >= 2 then
         -- BIP-34 specifies block height in block.version >= 2
         local offset = len 
-        local opcode = tvb(len, 1):uint()
+        subtree:add(fields.tx_out_opcode, tvb(offset, 1)) 
+        local opcode = tvb(offset, 1):uint()
         assert(opcode <=75)
         assert(opcode >=1)
         offset = offset + 1
@@ -343,8 +350,7 @@ end
 
 function dissect_unlocking_script(tvb, pinfo, tree)
     local subtree = tree:add('Unlocking Script')
-    local tmp =  dissect_script(tvb, subtree)
-    return tmp
+    return dissect_script(tvb, subtree)
 end
 
 function dissect_tx_in(tvb, pinfo, tree, index, block_version) 
