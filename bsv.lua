@@ -574,6 +574,8 @@ end
 
 local tcp_port_dissector = DissectorTable.get("tcp.port")
 
-tcp_port_dissector:add(8333, bsv_protocol)
-tcp_port_dissector:add(18333, bsv_protocol)
+tcp_port_dissector:add(8333, bsv_protocol) -- mainnet
+tcp_port_dissector:add(9333, bsv_protocol) -- stn
+tcp_port_dissector:add(18333, bsv_protocol) -- testnet
+tcp_port_dissector:add(18444, bsv_protocol) -- regtest
 
