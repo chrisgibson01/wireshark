@@ -173,7 +173,6 @@ fields.var_int8 = ProtoField.uint64("bsv.var_int_8", "var_int")
 
 fields.out_point_index = ProtoField.uint32("bsv.out_point.index", "Index", base.HEX)
 
-fields.tx_in_signature_script = ProtoField.string("bsv.tx_in_signature_script", "Signature Script")
 fields.tx_in_block_height = ProtoField.uint32("bsv.tx_in_block_height", "Block Height")
 fields.tx_in_extra_nonce = ProtoField.bytes("bsv.tx_in_extra_nonce", "Extra Nonce")
 fields.tx_in_miner_data = ProtoField.string("bsv.tx_in_miner_data", "Miner Data")
@@ -342,8 +341,8 @@ function dissect_coinbase_data(tvb, pinfo, tree, block_version)
     return len + n
 end
 
-function dissect_sig_script(tvb, pinfo, tree)
-    local subtree = tree:add('Signature Script')
+function dissect_unlocking_script(tvb, pinfo, tree)
+    local subtree = tree:add('Unlocking Script')
     local tmp =  dissect_script(tvb, subtree)
     return tmp
 end
@@ -355,7 +354,7 @@ function dissect_tx_in(tvb, pinfo, tree, index, block_version)
     if index == 0 then
         offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree, block_version) 
     else
-        offset = offset + dissect_sig_script(tvb(offset), pinfo, subtree)
+        offset = offset + dissect_unlocking_script(tvb(offset), pinfo, subtree)
     end
 
     subtree:add(fields.tx_in_sequence, tvb(offset, 4))
@@ -367,7 +366,7 @@ function dissect_tx_out(tvb, tree, index)
 
     subtree:add_le(fields.tx_out_value, tvb(0, 8))
 
-    local pub_key_tree = subtree:add('Script Pub Key')
+    local pub_key_tree = subtree:add('Locking script')
 
     local n = dissect_script(tvb(8), pub_key_tree)
     return 8 + n
