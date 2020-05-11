@@ -353,11 +353,11 @@ function dissect_unlocking_script(tvb, pinfo, tree)
     return dissect_script(tvb, subtree)
 end
 
-function dissect_tx_in(tvb, pinfo, tree, index, block_version) 
-    local subtree = tree:add('TxIn ' .. index)
+function dissect_tx_in(tvb, pinfo, tree, tx_index, ip_index, block_version) 
+    local subtree = tree:add('TxIn ' .. ip_index)
     local offset = dissect_out_point(tvb(0, 36), subtree)
     
-    if index == 0 then
+    if tx_index == 0 then
         offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree, block_version) 
     else
         offset = offset + dissect_unlocking_script(tvb(offset), pinfo, subtree)
@@ -386,7 +386,7 @@ function dissect_tx(tvb, pinfo, tree, block_version, index)
     offset = offset + len
 
     for i=0, n-1 do 
-        offset = offset + dissect_tx_in(tvb(offset), pinfo, subtree, index, block_version) 
+        offset = offset + dissect_tx_in(tvb(offset), pinfo, subtree, index, i, block_version) 
     end
 
     len, n = dissect_var_int(tvb(offset), subtree)
