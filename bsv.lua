@@ -186,6 +186,12 @@ fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence", base
 fields.tx_out_value = ProtoField.int64("bsv.tx_out.value", "Value")
 fields.tx_script_opcode = ProtoField.uint8("bsv.tx.script.opcode", "Opcode", base.HEX, opcode)
 fields.tx_script_data = ProtoField.bytes("bsv.tx.script.data", "Data")
+fields.tx_script_der_start = ProtoField.uint8("bsv.tx.script.der.start", "Start")
+fields.tx_script_der_len = ProtoField.uint8("bsv.tx.script.der.len", "Length")
+fields.tx_script_der_type = ProtoField.uint8("bsv.tx.script.der.type", "Type")
+fields.tx_script_der_r = ProtoField.bytes("bsv.tx.script.der.r", "R")
+fields.tx_script_der_s = ProtoField.bytes("bsv.tx.script.der.s", "S")
+fields.tx_script_der_sighash = ProtoField.uint8("bsv.tx.script.der.sighash", "Signature Hash")
 fields.tx_lock_time = ProtoField.absolute_time("bsv.tx_out.lock_time", "Lock Time")
 fields.tx_lock_block = ProtoField.uint32("bsv.tx_out.lock_block", "Lock Time Block")
 
@@ -298,6 +304,47 @@ function dissect_out_point(tvb, tree)
     return 36
 end
 
+function dissect_digital_signature(tvb, tree)
+    local subtree = tree:add('Digital Signature')
+    assert(tvb:len() == 0x48)
+
+    local offset = 0
+    subtree:add(fields.tx_script_der_start, tvb(offset, 1))
+    offset = offset + 1
+    subtree:add(fields.tx_script_der_len, tvb(offset, 1))
+    offset = offset + 1
+    subtree:add(fields.tx_script_der_type, tvb(offset, 1))
+    offset = offset + 1
+    subtree:add(fields.tx_script_der_len, tvb(offset, 1))
+    offset = offset + 1
+    subtree:add(fields.tx_script_der_r, tvb(offset, 33)) -- cjg
+    offset = offset + 33 -- cjg
+    subtree:add(fields.tx_script_der_type, tvb(offset, 1))
+    offset = offset + 1
+    subtree:add(fields.tx_script_der_len, tvb(offset, 1))
+    offset = offset + 1
+    subtree:add(fields.tx_script_der_s, tvb(offset, 32)) -- cjg
+    offset = offset + 32 -- cjg
+    subtree:add(fields.tx_script_der_sighash, tvb(offset, 1)) 
+end
+
+function dissect_public_key(tvb, tree) -- cjg nothing to dissect
+    local subtree = tree:add('Public Key')
+    assert(tvb:len() == 0x21)
+    subtree:add(fields.tx_script_data, tvb) 
+end
+
+function dissect_data(tvb, tree)
+    local len = tvb:len()
+    if len == 0x21 then
+        dissect_public_key(tvb, tree)
+    elseif len == 0x48 then 
+        dissect_digital_signature(tvb, tree)
+    else
+        tree:add(fields.tx_script_data, tvb) 
+    end
+end
+
 function dissect_script(tvb, tree)
     local len, n = dissect_var_int(tvb, tree)
     local offset = len
@@ -307,7 +354,7 @@ function dissect_script(tvb, tree)
         if opcode <= 75 and opcode >= 1 then
             tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
             offset = offset + 1  
-            tree:add(fields.tx_script_data, tvb(offset, opcode)) 
+            dissect_data(tvb(offset, opcode), tree) 
             offset = offset + opcode
         else
             tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
