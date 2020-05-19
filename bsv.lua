@@ -177,6 +177,7 @@ fields.var_int8 = ProtoField.uint64("bsv.var_int_8", "var_int")
 
 fields.out_point_index = ProtoField.uint32("bsv.out_point.index", "Index", base.HEX)
 
+fields.txid = ProtoField.bytes("bsv.txid", "TxId")
 fields.tx_in_block_height = ProtoField.uint32("bsv.tx_in_block_height", "Block Height")
 fields.tx_in_extra_nonce = ProtoField.bytes("bsv.tx_in_extra_nonce", "Extra Nonce")
 fields.tx_in_miner_data = ProtoField.string("bsv.tx_in_miner_data", "Miner Data")
@@ -299,7 +300,7 @@ end
 
 function dissect_out_point(tvb, tree) 
     local subtree = tree:add('OutPoint')
-    subtree:add(fields.hash, tvb(0, 32))
+    subtree:add(fields.txid, tvb(0, 32))
     subtree:add_le(fields.out_point_index, tvb(32, 4))
     return 36
 end
