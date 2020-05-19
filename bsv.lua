@@ -184,8 +184,8 @@ fields.tx_in_miner_data = ProtoField.string("bsv.tx_in_miner_data", "Miner Data"
 fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence", base.HEX)
 
 fields.tx_out_value = ProtoField.int64("bsv.tx_out.value", "Value")
-fields.tx_out_opcode = ProtoField.uint8("bsv.tx_out.script", "Opcode", base.HEX, opcode)
-fields.tx_out_data = ProtoField.bytes("bsv.tx_out.data", "Data")
+fields.tx_script_opcode = ProtoField.uint8("bsv.tx.script.opcode", "Opcode", base.HEX, opcode)
+fields.tx_script_data = ProtoField.bytes("bsv.tx.script.data", "Data")
 fields.tx_lock_time = ProtoField.absolute_time("bsv.tx_out.lock_time", "Lock Time")
 fields.tx_lock_block = ProtoField.uint32("bsv.tx_out.lock_block", "Lock Time Block")
 
@@ -305,12 +305,12 @@ function dissect_script(tvb, tree)
 
         local opcode = tvb(offset, 1):uint()
         if opcode <= 75 and opcode >= 1 then
-            tree:add(fields.tx_out_opcode, tvb(offset, 1)) 
+            tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
             offset = offset + 1  
-            tree:add(fields.tx_out_data, tvb(offset, opcode)) 
+            tree:add(fields.tx_script_data, tvb(offset, opcode)) 
             offset = offset + opcode
         else
-            tree:add(fields.tx_out_opcode, tvb(offset, 1)) 
+            tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
             offset = offset + 1
         end
     end
@@ -325,7 +325,7 @@ function dissect_coinbase_data(tvb, pinfo, tree, block_version)
     if block_version >= 2 then
         -- BIP-34 specifies block height in block.version >= 2
         local offset = len 
-        subtree:add(fields.tx_out_opcode, tvb(offset, 1)) 
+        subtree:add(fields.tx_script_opcode, tvb(offset, 1)) 
         local opcode = tvb(offset, 1):uint()
         assert(opcode <=75)
         assert(opcode >=1)
