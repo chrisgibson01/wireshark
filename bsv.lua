@@ -186,6 +186,8 @@ fields.tx_in_sequence = ProtoField.uint32("bsv.tx_in_sequence", "Sequence", base
 
 fields.tx_out_value = ProtoField.int64("bsv.tx_out.value", "Value")
 fields.tx_script_opcode = ProtoField.uint8("bsv.tx.script.opcode", "Opcode", base.HEX, opcode)
+fields.tx_script_public_key = ProtoField.bytes("bsv.tx.script.public_key", "Data")
+fields.tx_script_public_key_hash = ProtoField.bytes("bsv.tx.script.public_key_hash", "Data")
 fields.tx_script_data = ProtoField.bytes("bsv.tx.script.data", "Data")
 fields.tx_script_der_start = ProtoField.uint8("bsv.tx.script.der.start", "Start")
 fields.tx_script_der_len = ProtoField.uint8("bsv.tx.script.der.len", "Length")
@@ -305,9 +307,9 @@ function dissect_out_point(tvb, tree)
     return 36
 end
 
+-- cjg see BIP_0062
 function dissect_digital_signature(tvb, tree)
     local subtree = tree:add('Digital Signature')
-    assert(tvb:len() == 0x48)
 
     local offset = 0
     subtree:add(fields.tx_script_der_start, tvb(offset, 1))
@@ -316,33 +318,44 @@ function dissect_digital_signature(tvb, tree)
     offset = offset + 1
     subtree:add(fields.tx_script_der_type, tvb(offset, 1))
     offset = offset + 1
+    local len = tvb(offset, 1):uint()
     subtree:add(fields.tx_script_der_len, tvb(offset, 1))
     offset = offset + 1
-    subtree:add(fields.tx_script_der_r, tvb(offset, 33)) -- cjg
-    offset = offset + 33 -- cjg
+    subtree:add(fields.tx_script_der_r, tvb(offset, len)) 
+    offset = offset + len
     subtree:add(fields.tx_script_der_type, tvb(offset, 1))
     offset = offset + 1
+    len = tvb(offset, 1):uint()
     subtree:add(fields.tx_script_der_len, tvb(offset, 1))
     offset = offset + 1
-    subtree:add(fields.tx_script_der_s, tvb(offset, 32)) -- cjg
-    offset = offset + 32 -- cjg
+    subtree:add(fields.tx_script_der_s, tvb(offset, len)) 
+    offset = offset + len
     subtree:add(fields.tx_script_der_sighash, tvb(offset, 1)) 
 end
 
 function dissect_public_key(tvb, tree) -- cjg nothing to dissect
+    assert(tvb:len() == 0x21) -- cjg
     local subtree = tree:add('Public Key')
-    assert(tvb:len() == 0x21)
-    subtree:add(fields.tx_script_data, tvb) 
+    subtree:add(fields.tx_script_public_key, tvb) 
+end
+
+function dissect_public_key_hash(tvb, tree) -- cjg nothing to dissect
+    assert(tvb:len() == 0x14) -- cjg is the always true? 
+    local subtree = tree:add('Public Key Hash')
+    subtree:add(fields.tx_script_public_key_hash, tvb) 
 end
 
 function dissect_data(tvb, tree)
     local len = tvb:len()
-    if len == 0x21 then
+    local start = tvb(0, 1):uint()
+    if start == 0x30 then -- assume digital signature see BIP_0062
+        dissect_digital_signature(tvb, tree) 
+    elseif len == 0x21 then --cjg
         dissect_public_key(tvb, tree)
-    elseif len == 0x48 then 
-        dissect_digital_signature(tvb, tree)
+    elseif len == 0x14 then -- 20 bytes
+        dissect_public_key_hash(tvb, tree)
     else
-        tree:add(fields.tx_script_data, tvb) 
+        tree:add(fields.tx_script_data, tvb) -- cjg public key hash
     end
 end
 
