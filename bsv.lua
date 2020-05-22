@@ -189,6 +189,7 @@ fields.tx_script_opcode = ProtoField.uint8("bsv.tx.script.opcode", "Opcode", bas
 fields.tx_script_public_key = ProtoField.bytes("bsv.tx.script.public_key", "Data")
 fields.tx_script_public_key_hash = ProtoField.bytes("bsv.tx.script.public_key_hash", "Data")
 fields.tx_script_data = ProtoField.bytes("bsv.tx.script.data", "Data")
+fields.tx_script_data_len = ProtoField.uint8("bsv.tx.script.data.len", "Length")
 fields.tx_script_der_start = ProtoField.uint8("bsv.tx.script.der.start", "Start")
 fields.tx_script_der_len = ProtoField.uint8("bsv.tx.script.der.len", "Length")
 fields.tx_script_der_type = ProtoField.uint8("bsv.tx.script.der.type", "Type")
@@ -348,11 +349,11 @@ end
 function dissect_data(tvb, tree)
     local len = tvb:len()
     local start = tvb(0, 1):uint()
-    if start == 0x30 then -- assume digital signature see BIP_0062
+    if len <= 72 and start == 0x30 then -- assume digital signature see BIP_0062
         dissect_digital_signature(tvb, tree) 
-    elseif len == 0x21 then --cjg
+    elseif len == 33 then --cjg
         dissect_public_key(tvb, tree)
-    elseif len == 0x14 then -- 20 bytes
+    elseif len == 20 then 
         dissect_public_key_hash(tvb, tree)
     else
         tree:add(fields.tx_script_data, tvb) -- cjg public key hash
@@ -370,6 +371,16 @@ function dissect_script(tvb, tree)
             offset = offset + 1  
             dissect_data(tvb(offset, opcode), tree) 
             offset = offset + opcode
+        elseif opcode == 0x4c then
+            tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
+            offset = offset + 1  
+            local len = tvb(offset, 1):uint()
+            tree:add(fields.tx_script_data_len, tvb(offset, 1)) 
+            offset = offset + 1  
+            dissect_data(tvb(offset, len), tree) 
+            offset = offset + len
+        elseif opcode == 0x4d or opcode == 0x4e then
+            assert(false) -- cjg OP_PUSHDATA2 | OP_PUSHDATA4
         else
             tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
             offset = offset + 1
