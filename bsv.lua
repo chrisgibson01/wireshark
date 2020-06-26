@@ -426,7 +426,7 @@ function dissect_unlocking_script(tvb, pinfo, tree)
 end
 
 function dissect_tx_in(tvb, pinfo, tree, tx_index, ip_index, block_version) 
-    local subtree = tree:add('TxIn ' .. ip_index)
+    local subtree = tree:add('Input ' .. ip_index)
     local offset = dissect_out_point(tvb(0, 36), subtree)
     
     if tx_index == 0 then
@@ -440,7 +440,7 @@ function dissect_tx_in(tvb, pinfo, tree, tx_index, ip_index, block_version)
 end
     
 function dissect_tx_out(tvb, tree, index) 
-    local subtree = tree:add('TxOut ' .. index)
+    local subtree = tree:add('Output ' .. index)
 
     subtree:add_le(fields.tx_out_value, tvb(0, 8))
 
