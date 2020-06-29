@@ -349,12 +349,12 @@ end
 function dissect_data(tvb, tree)
     local len = tvb:len()
     local start = tvb(0, 1):uint()
-    if len <= 72 and start == 0x30 then -- assume digital signature see BIP_0062
-        dissect_digital_signature(tvb, tree) 
+    if len == 20 then 
+        dissect_public_key_hash(tvb, tree)
     elseif len == 33 then --cjg
         dissect_public_key(tvb, tree)
-    elseif len == 20 then 
-        dissect_public_key_hash(tvb, tree)
+    elseif len <= 72 and start == 0x30 then -- assume digital signature see BIP_0062
+        dissect_digital_signature(tvb, tree) 
     else
         tree:add(fields.tx_script_data, tvb) -- cjg public key hash
     end
