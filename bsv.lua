@@ -360,6 +360,11 @@ function dissect_data(tvb, tree)
     end
 end
 
+function dissect_data2(tvb, tree)
+    local len = tvb:len()
+    tree:add(fields.tx_script_data, tvb)
+end
+
 function dissect_script(tvb, tree)
     local len, n = dissect_var_int(tvb, tree)
     local offset = len
@@ -371,7 +376,7 @@ function dissect_script(tvb, tree)
             offset = offset + 1  
             dissect_data(tvb(offset, opcode), tree) 
             offset = offset + opcode
-        elseif opcode == 0x4c then
+        elseif opcode == 0x4c then -- 0x4c == OP_PUSHDATA1
             tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
             offset = offset + 1  
             local len = tvb(offset, 1):uint()
@@ -381,6 +386,9 @@ function dissect_script(tvb, tree)
             offset = offset + len
         elseif opcode == 0x4d or opcode == 0x4e then
             assert(false) -- cjg OP_PUSHDATA2 | OP_PUSHDATA4
+        elseif opcode == 0x6a then -- 0x6a == OP_RETURN
+            dissect_data2(tvb(offset), tree)
+            break
         else
             tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
             offset = offset + 1
