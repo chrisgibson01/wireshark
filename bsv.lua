@@ -203,7 +203,8 @@ fields.block_version = ProtoField.uint32("bsv.block.version", "Version")
 fields.block_prev_block = ProtoField.bytes("bsv.block.pre_block", "Prev Block")
 fields.block_merkle_root = ProtoField.bytes("bsv.block.merkle_root", "Merkle Root")
 fields.block_timestamp = ProtoField.absolute_time("bsv.block.timestamp", "Timestamp", base.UTC)
-fields.block_difficulty = ProtoField.uint32("bsv.block.difficulty", "Difficulty")  -- cjg bits
+fields.block_target_exponent = ProtoField.uint8("bsv.block.target.exponent", "Exponent", base.HEX)
+fields.block_target_mantissa = ProtoField.uint24("bsv.block.target.mantissa", "Mantissa", base.HEX)
 fields.block_nonce = ProtoField.uint32("bsv.block.nonce", "Nonce")
 
 fields.addr_timestamp = ProtoField.absolute_time("bsv.addr.timestamp", "Timestamp")
@@ -484,6 +485,14 @@ function dissect_tx(tvb, pinfo, tree, block_version, index)
     return offset + 4
 end
 
+function dissect_target(tvb, tree)
+    local length = tvb:len()
+    assert(length == 4)
+    local subtree = tree:add("target")
+    subtree:add_le(fields.block_target_mantissa, tvb(0, 3))
+    subtree:add(fields.block_target_exponent, tvb(3, 1))
+end
+
 msg_dissectors.block = function (tvb, pinfo, tree)
     pinfo.cols.info = 'block'
 
@@ -493,7 +502,7 @@ msg_dissectors.block = function (tvb, pinfo, tree)
     subtree:add(fields.block_prev_block, tvb(4, 32))
     subtree:add(fields.block_merkle_root, tvb(36, 32))
     subtree:add_le(fields.block_timestamp, tvb(68, 4))
-    subtree:add_le(fields.block_difficulty, tvb(72, 4))
+    dissect_target(tvb(72, 4), subtree)
     subtree:add_le(fields.block_nonce, tvb(76, 4))
     
     local len, count = dissect_var_int(tvb(80), subtree) 
@@ -579,7 +588,7 @@ msg_dissectors.headers = function(tvb, pinfo, tree)
         offset = offset + 32
         blockTree:add_le(fields.block_timestamp, tvb(offset, 4))
         offset = offset + 4
-        blockTree:add_le(fields.block_difficulty, tvb(offset, 4))
+        dissect_target(tvb(offset, 4), blockTree)
         offset = offset + 4
         blockTree:add_le(fields.block_nonce, tvb(offset, 4))
         offset = offset + 4
