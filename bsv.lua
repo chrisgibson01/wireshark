@@ -629,8 +629,8 @@ msg_dissectors.default = function(cmd, pinfo)
     pinfo.cols.info = cmd
 end
 
-msg_dissectors.unknown = function(cmd)
-    print('*** unknown dissector ' .. cmd .. ' ***')
+msg_dissectors.unknown = function(cmd, pinfo)
+    pinfo.cols.info = '*** ' .. cmd .. ' dissector not yet implemented ***'
 end
 
 function dissect_inventory_vector(tvb, pinfo, tree)
@@ -665,7 +665,7 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
         if cmd_dissector ~= nil then
             cmd_dissector(tvb(header_len), pinfo, subtree)
         else
-            msg_dissectors.unknown(cmd)
+            msg_dissectors.unknown(cmd, pinfo)
         end
     else
         msg_dissectors.default(cmd, pinfo)
