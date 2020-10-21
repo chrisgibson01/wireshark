@@ -224,6 +224,9 @@ fields.network_address_port = ProtoField.uint16("bsv.network_addr.port", "Port")
 fields.network_address_services = ProtoField.bytes("bsv.network_addr.services", "Services")
 fields.network_address_ip = ProtoField.ipv6("bsv.network_addr.ip", "IP Address")
 
+fields.sendcmpct_on = ProtoField.uint8("bsv.sendcmpct.on", "Enable")
+fields.sendcmpct_version = ProtoField.uint64("bsv.sendcmpct.version", "Version")
+
 msg_dissectors = {}
 
 bsv_protocol.fields = fields
@@ -489,7 +492,7 @@ function dissect_target(tvb, tree)
     local length = tvb:len()
     assert(length == 4)
     local subtree = tree:add("target")
-    subtree:add_le(fields.block_target_mantissa, tvb(0, 3))
+    subtree:add(fields.block_target_mantissa, tvb(0, 3))
     subtree:add(fields.block_target_exponent, tvb(3, 1))
 end
 
@@ -613,6 +616,9 @@ end
 
 msg_dissectors.sendcmpct = function (tvb, pinfo, tree)
     pinfo.cols.info = 'sendcmpct'
+    local subtree = tree:add("Send Compact Blocks")
+    subtree:add(fields.sendcmpct_on, tvb(0, 1))
+    subtree:add_le(fields.sendcmpct_version, tvb(1, 8))
 end
 
 msg_dissectors.feefilter = function (tvb, pinfo, tree)
