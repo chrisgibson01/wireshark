@@ -227,6 +227,8 @@ fields.network_address_ip = ProtoField.ipv6("bsv.network_addr.ip", "IP Address")
 fields.sendcmpct_on = ProtoField.uint8("bsv.sendcmpct.on", "Enable")
 fields.sendcmpct_version = ProtoField.uint64("bsv.sendcmpct.version", "Version")
 
+fields.satoshis_per_kb = ProtoField.int64("bsv.feefilter", "Minimum Satoshis/kb")
+
 msg_dissectors = {}
 
 bsv_protocol.fields = fields
@@ -636,6 +638,7 @@ end
 
 msg_dissectors.feefilter = function (tvb, pinfo, tree)
     pinfo.cols.info = 'feefilter'
+    tree:add_le(fields.satoshis_per_kb, tvb(0, 8))
 end
 
 msg_dissectors.default = function(cmd, pinfo)
