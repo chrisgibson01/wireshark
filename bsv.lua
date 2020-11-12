@@ -620,6 +620,11 @@ end
 
 msg_dissectors.protoconf = function (tvb, pinfo, tree)
     pinfo.cols.info = 'protoconf'
+
+    len, n = dissect_var_int(tvb, tree)
+    -- cjg
+    -- http://github.com/bitcoin-sv-specs/protocol/blob/master/p2p/protoconf.md
+    -- len, n = dissect_var_int(tvb(len), tree)
 end
 
 msg_dissectors.sendcmpct = function (tvb, pinfo, tree)
