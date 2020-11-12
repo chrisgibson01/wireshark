@@ -463,29 +463,34 @@ function dissect_tx_out(tvb, tree, index)
 end
 
 function dissect_tx(tvb, pinfo, tree, block_version, index)
-    local subtree = tree:add('Tx ' .. index)
-    subtree:add_le(fields.tx_version, tvb(0, 4))
+    tree:add_le(fields.tx_version, tvb(0, 4))
     local offset = 4
-    local len, n = dissect_var_int(tvb(4), subtree)
+    local len, n = dissect_var_int(tvb(4), tree)
     offset = offset + len
 
     for i=0, n-1 do 
-        offset = offset + dissect_tx_in(tvb(offset), pinfo, subtree, index, i, block_version) 
+        offset = offset + dissect_tx_in(tvb(offset), pinfo, tree, index, i, block_version) 
     end
 
-    len, n = dissect_var_int(tvb(offset), subtree)
+    len, n = dissect_var_int(tvb(offset), tree)
     offset = offset + len
     for i = 0, n-1 do
-        offset = offset + dissect_tx_out(tvb(offset), subtree, i)
+        offset = offset + dissect_tx_out(tvb(offset), tree, i)
     end
 
     if tvb(offset, 4):le_uint() < 500000000 then
-        subtree:add_le(fields.tx_lock_block, tvb(offset, 4))
+        tree:add_le(fields.tx_lock_block, tvb(offset, 4))
     else
-        subtree:add_le(fields.tx_lock_time, tvb(offset, 4))
+        tree:add_le(fields.tx_lock_time, tvb(offset, 4))
     end
 
     return offset + 4
+end
+
+msg_dissectors.tx = function(tvb, pinfo, tree)
+    pinfo.cols.info = 'tx'
+    local subtree = tree:add('Tx')
+    dissect_tx(tvb, pinfo, subtree, 1, 0)
 end
 
 function dissect_target(tvb, tree)
@@ -499,19 +504,20 @@ end
 msg_dissectors.block = function (tvb, pinfo, tree)
     pinfo.cols.info = 'block'
 
-    local subtree = tree:add("block")
-    subtree:add_le(fields.block_version, tvb(0, 4))
+    local block_tree = tree:add("block")
+    block_tree:add_le(fields.block_version, tvb(0, 4))
     local block_version = tvb(0, 4):le_int()
-    subtree:add(fields.block_prev_block, tvb(4, 32))
-    subtree:add(fields.block_merkle_root, tvb(36, 32))
-    subtree:add_le(fields.block_timestamp, tvb(68, 4))
-    dissect_target(tvb(72, 4), subtree)
-    subtree:add_le(fields.block_nonce, tvb(76, 4))
+    block_tree:add(fields.block_prev_block, tvb(4, 32))
+    block_tree:add(fields.block_merkle_root, tvb(36, 32))
+    block_tree:add_le(fields.block_timestamp, tvb(68, 4))
+    dissect_target(tvb(72, 4), block_tree)
+    block_tree:add_le(fields.block_nonce, tvb(76, 4))
     
-    local len, count = dissect_var_int(tvb(80), subtree) 
+    local len, count = dissect_var_int(tvb(80), block_tree) 
     local tx_start = 80 + len 
     for i = 0, count-1 do
-        tx_start = tx_start + dissect_tx(tvb(tx_start), pinfo, subtree, block_version, i) 
+        local tx_tree = block_tree:add('Tx ' .. i)
+        tx_start = tx_start + dissect_tx(tvb(tx_start), pinfo, tx_tree, block_version, i) 
     end
 end
 
