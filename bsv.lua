@@ -544,7 +544,8 @@ function dissect_header(tvb, pinfo, tree)
     subtree:add_le(fields.length, tvb(16, 4))
     subtree:add(fields.checksum, tvb(20, 4))
 
-    cmd = tvb:range(4, 12):stringz() 
+    local cmd = tvb:range(4, 12):stringz() 
+    pinfo.cols.info = cmd
     return cmd
 end
 
@@ -650,10 +651,6 @@ msg_dissectors.feefilter = function (tvb, pinfo, tree)
     tree:add_le(fields.satoshis_per_kb, tvb(0, 8))
 end
 
-msg_dissectors.default = function(cmd, pinfo)
-    pinfo.cols.info = cmd
-end
-
 msg_dissectors.unknown = function(cmd, pinfo)
     pinfo.cols.info = '*** ' .. cmd .. ' dissector not yet implemented ***'
 end
@@ -666,24 +663,20 @@ function get_payload_length(tvb)
     return tvb:le_uint()
 end
 
-function bsv_protocol.dissector(tvb, pinfo, tree)
-    seg_len = tvb:len()
+function dissect_msg(tvb, pinfo, subtree)
+    
+    local seg_len = tvb:len()
     if seg_len < header_len then 
-        return 
+        return 0, header_len
     end
 
+    local cmd = dissect_header(tvb, pinfo, subtree)
     local payload_len = get_payload_length(tvb(16, 4)) 
     local msg_len = header_len + payload_len
+
     if(msg_len > seg_len) then
-        pinfo.desegment_len = msg_len - seg_len;
-        pinfo.desegment_offset = 0 
-        return
+        return 0, payload_len 
     end
-
-    pinfo.cols.protocol = bsv_protocol.name
-
-    local subtree = tree:add(bsv_protocol, tvb(), "Bitcoin SV")
-    cmd = dissect_header(tvb, pinfo, subtree)
 
     if payload_len > 0 then
         local cmd_dissector = msg_dissectors[cmd]
@@ -692,8 +685,27 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
         else
             msg_dissectors.unknown(cmd, pinfo)
         end
-    else
-        msg_dissectors.default(cmd, pinfo)
+    end
+    
+    return header_len + payload_len, 0
+end
+
+function bsv_protocol.dissector(tvb, pinfo, tree)
+    local seg_len = tvb:len()
+
+    pinfo.cols.protocol = bsv_protocol.name
+
+    local subtree = tree:add(bsv_protocol, tvb(), "Bitcoin SV")
+
+    local offset = 0
+    while offset < seg_len do
+        local len, reqd = dissect_msg(tvb(offset), pinfo, subtree)
+        if len == 0 then
+            pinfo.desegment_len = reqd
+            pinfo.desegment_offset = offset 
+            return 
+        end
+        offset = offset + len
     end
 end
 
