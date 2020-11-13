@@ -156,6 +156,15 @@ for i = 0x1, 0x4b do
     opcode[i] = 'Data Length'
 end
 
+local inv_type =
+{
+    [0] = 'error',
+    [1] = 'tx',
+    [2] = 'block',
+    [3] = 'filtered block',
+    [4] = 'cmpct block'
+}
+
 local fields = {}
 
 fields.ping_nonce = ProtoField.uint64("bsv.ping.nonce", "Random Nonce")
@@ -165,7 +174,7 @@ fields.magic = ProtoField.uint32("bsv.header.magic", "Magic", base.HEX)
 fields.cmd = ProtoField.string("bsv.header.cmd", "Command")
 fields.length = ProtoField.uint32("bsv.header.length", "Length")
 fields.checksum = ProtoField.bytes("bsv.header.checksum", "Checksum")
-fields.inv_type = ProtoField.uint32("bsv.inv.type", "Type")
+fields.inv_type = ProtoField.uint32("bsv.inv.type", "Type", base.HEX, inv_type)
 fields.hash = ProtoField.bytes("bsv.hash", "Hash")
 
 fields.getheaders_version = ProtoField.uint32("bsv.getheaders.version", "Version")
