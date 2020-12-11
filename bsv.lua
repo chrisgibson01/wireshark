@@ -246,6 +246,8 @@ fields.sendcmpct_version = ProtoField.uint64("bsv.sendcmpct.version", "Version")
 
 fields.satoshis_per_kb = ProtoField.int64("bsv.feefilter", "Minimum Satoshis/kb")
 
+fields.hasids_nonce = ProtoField.uint64("bsv.header_and_short_ids.nonce", "Nonce")
+
 msg_dissectors = {}
 
 bsv_protocol.fields = fields
@@ -454,11 +456,11 @@ function dissect_unlocking_script(tvb, pinfo, tree)
     return dissect_script(tvb, subtree)
 end
 
-function dissect_tx_in(tvb, pinfo, tree, coinbase_tx, ip_index, block_version) 
+function dissect_tx_in(tvb, pinfo, tree, is_coinbase_tx, ip_index, block_version) 
     local subtree = tree:add('Input ' .. ip_index)
     local offset = dissect_out_point(tvb(0, 36), subtree)
     
-    if coinbase_tx and ip_index == 0 and block_version >= 2 then
+    if is_coinbase_tx and ip_index == 0 and block_version >= 2 then
         offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree) 
     else
         offset = offset + dissect_unlocking_script(tvb(offset), pinfo, subtree)
@@ -479,14 +481,14 @@ function dissect_tx_out(tvb, tree, index)
     return 8 + n
 end
 
-function dissect_tx(tvb, pinfo, tree, block_version, coinbase_tx)
+function dissect_tx(tvb, pinfo, tree, block_version, is_coinbase_tx)
     tree:add_le(fields.tx_version, tvb(0, 4))
     local offset = 4
     local len, n = dissect_var_int(tvb(4), tree)
     offset = offset + len
 
     for i=0, n-1 do 
-        offset = offset + dissect_tx_in(tvb(offset), pinfo, tree, coinbase_tx, i, block_version) 
+        offset = offset+dissect_tx_in(tvb(offset), pinfo, tree, is_coinbase_tx, i, block_version) 
     end
 
     len, n = dissect_var_int(tvb(offset), tree)
@@ -514,21 +516,27 @@ function dissect_target(tvb, tree)
     local length = tvb:len()
     assert(length == 4)
     local subtree = tree:add("target")
-    subtree:add(fields.block_target_mantissa, tvb(0, 3))
+    subtree:add_le(fields.block_target_mantissa, tvb(0, 3))
     subtree:add(fields.block_target_exponent, tvb(3, 1))
 end
 
-msg_dissectors.block = function (tvb, pinfo, tree)
+function dissect_block_header(tvb, tree)
+    local subtree = tree:add("block header")
+    subtree:add_le(fields.block_version, tvb(0, 4))
+    local block_version = tvb(0, 4):le_int()
+    subtree:add(fields.block_prev_block, tvb(4, 32))
+    subtree:add(fields.block_merkle_root, tvb(36, 32))
+    subtree:add_le(fields.block_timestamp, tvb(68, 4))
+    dissect_target(tvb(72, 4), subtree)
+    subtree:add_le(fields.block_nonce, tvb(76, 4))
+    return 80, block_version
+end
+
+msg_dissectors.block = function(tvb, pinfo, tree)
     pinfo.cols.info = 'block'
     local block_tree = tree:add("block")
-    block_tree:add_le(fields.block_version, tvb(0, 4))
-    local block_version = tvb(0, 4):le_int()
-    block_tree:add(fields.block_prev_block, tvb(4, 32))
-    block_tree:add(fields.block_merkle_root, tvb(36, 32))
-    block_tree:add_le(fields.block_timestamp, tvb(68, 4))
-    dissect_target(tvb(72, 4), block_tree)
-    block_tree:add_le(fields.block_nonce, tvb(76, 4))
-    
+
+    local _, block_version = dissect_block_header(tvb(0, 80), block_tree)
     local len, count = dissect_var_int(tvb(80), block_tree) 
     local tx_start = 80 + len 
     for i = 0, count-1 do
@@ -652,6 +660,36 @@ msg_dissectors.sendcmpct = function (tvb, pinfo, tree)
     local subtree = tree:add("Send Compact Blocks")
     subtree:add(fields.sendcmpct_on, tvb(0, 1))
     subtree:add_le(fields.sendcmpct_version, tvb(1, 8))
+end
+
+function dissect_prefilled_tx(tvb, pinfo, tree, block_version, is_coinbase_tx)
+    local subtree = tree:add('Prefilled Tx')
+    local len, n = dissect_var_int(tvb, subtree, block_version, is_coinbase_tx)
+    return dissect_tx(tvb(n+len), pinfo, subtree)
+end
+
+msg_dissectors.cmpctblock = function (tvb, pinfo, tree)
+    pinfo.cols.info = 'cmpctblock'
+    local subtree = tree:add("Compact Block")
+    local hasi_tree = subtree:add("HeaderAndShortIDs")
+
+    local offset, block_version = dissect_block_header(tvb, hasi_tree)
+
+    hasi_tree:add_le(fields.hasids_nonce, tvb(offset, 8))
+    offset = offset + 8
+    local len, n = dissect_var_int(tvb(offset), hasi_tree)
+    offset = offset + len
+--  short ids
+    for i=0, n-1 do 
+       offset = offset + 6 
+    end
+
+    len, n = dissect_var_int(tvb(offset), hasi_tree)
+    offset = offset + len
+    for i=0, n-1 do 
+       len = dissect_prefilled_tx(tvb(offset), pinfo, hasi_tree, block_version, false) -- cjg
+       offset = offset + len 
+    end
 end
 
 msg_dissectors.feefilter = function (tvb, pinfo, tree)
