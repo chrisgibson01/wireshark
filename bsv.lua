@@ -170,7 +170,15 @@ local fields = {}
 fields.ping_nonce = ProtoField.uint64("bsv.ping.nonce", "Random Nonce")
 fields.pong_nonce = ProtoField.uint64("bsv.pong.nonce", "Reply Nonce")
 
-fields.magic = ProtoField.uint32("bsv.header.magic", "Magic", base.HEX)
+local magic =
+{
+    [0xe3e1f3e8] = 'mainnet',
+    [0xdab5bffa] = 'regtest',
+    [0xf4e5f3f4] = 'testnet',
+    [0xfbcec4f9] = 'stn'
+}
+
+fields.magic = ProtoField.uint32("bsv.header.magic", "Magic", base.HEX, magic)
 fields.cmd = ProtoField.string("bsv.header.cmd", "Command")
 fields.length = ProtoField.uint32("bsv.header.length", "Length")
 fields.checksum = ProtoField.bytes("bsv.header.checksum", "Checksum")
