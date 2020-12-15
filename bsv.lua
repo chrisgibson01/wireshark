@@ -216,7 +216,7 @@ fields.tx_script_der_sighash = ProtoField.uint8("bsv.tx.script.der.sighash", "Si
 fields.tx_lock_time = ProtoField.absolute_time("bsv.tx_out.lock_time", "Lock Time")
 fields.tx_lock_block = ProtoField.uint32("bsv.tx_out.lock_block", "Lock Time Block")
 
-fields.block_version = ProtoField.uint32("bsv.block.version", "Version")
+fields.block_version = ProtoField.uint32("bsv.block.version", "Version", base.HEX)
 fields.block_prev_block = ProtoField.bytes("bsv.block.pre_block", "Prev Block")
 fields.block_merkle_root = ProtoField.bytes("bsv.block.merkle_root", "Merkle Root")
 fields.block_timestamp = ProtoField.absolute_time("bsv.block.timestamp", "Timestamp", base.UTC)
@@ -333,7 +333,7 @@ function dissect_out_point(tvb, tree)
     return 36
 end
 
--- cjg see BIP_0062
+-- see BIP_0062
 function dissect_digital_signature(tvb, tree)
     local subtree = tree:add('Digital Signature')
 
@@ -359,14 +359,14 @@ function dissect_digital_signature(tvb, tree)
     subtree:add(fields.tx_script_der_sighash, tvb(offset, 1)) 
 end
 
-function dissect_public_key(tvb, tree) -- cjg nothing to dissect
-    assert(tvb:len() == 0x21) -- cjg
+function dissect_public_key(tvb, tree) 
+    assert(tvb:len() == 0x21) 
     local subtree = tree:add('Public Key')
     subtree:add(fields.tx_script_public_key, tvb) 
 end
 
-function dissect_public_key_hash(tvb, tree) -- cjg nothing to dissect
-    assert(tvb:len() == 0x14) -- cjg is the always true? 
+function dissect_public_key_hash(tvb, tree)
+    assert(tvb:len() == 0x14)
     local subtree = tree:add('Public Key Hash')
     subtree:add(fields.tx_script_public_key_hash, tvb) 
 end
@@ -456,11 +456,14 @@ function dissect_unlocking_script(tvb, pinfo, tree)
     return dissect_script(tvb, subtree)
 end
 
-function dissect_tx_in(tvb, pinfo, tree, is_coinbase_tx, ip_index, block_version) 
-    local subtree = tree:add('Input ' .. ip_index)
+function dissect_tx_in(tvb, pinfo, tree, block_version, iTx, iInput) 
+    local subtree = tree:add('Input ' .. iInput)
     local offset = dissect_out_point(tvb(0, 36), subtree)
     
-    if is_coinbase_tx and ip_index == 0 and block_version >= 2 then
+    local is_coinbase_tx = block_version >= 2 and 
+                           block_version ~= 0x20000000 and 
+                           iTx == 0 
+    if is_coinbase_tx and iInput == 0 then
         offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree) 
     else
         offset = offset + dissect_unlocking_script(tvb(offset), pinfo, subtree)
@@ -481,14 +484,15 @@ function dissect_tx_out(tvb, tree, index)
     return 8 + n
 end
 
-function dissect_tx(tvb, pinfo, tree, block_version, is_coinbase_tx)
+function dissect_tx(tvb, pinfo, tree, block_version, iTx)
     tree:add_le(fields.tx_version, tvb(0, 4))
     local offset = 4
     local len, n = dissect_var_int(tvb(4), tree)
     offset = offset + len
 
+
     for i=0, n-1 do 
-        offset = offset+dissect_tx_in(tvb(offset), pinfo, tree, is_coinbase_tx, i, block_version) 
+        offset = offset + dissect_tx_in(tvb(offset), pinfo, tree, block_version, iTx, i) 
     end
 
     len, n = dissect_var_int(tvb(offset), tree)
@@ -509,7 +513,9 @@ end
 msg_dissectors.tx = function(tvb, pinfo, tree)
     pinfo.cols.info = 'tx'
     local subtree = tree:add('Tx')
-    dissect_tx(tvb, pinfo, subtree, 1, false)
+    local block_version = 0
+    local iTx = 0
+    dissect_tx(tvb, pinfo, subtree, block_version, iTx)
 end
 
 function dissect_target(tvb, tree)
@@ -537,16 +543,15 @@ msg_dissectors.block = function(tvb, pinfo, tree)
     local block_tree = tree:add("block")
 
     local _, block_version = dissect_block_header(tvb(0, 80), block_tree)
-    local len, count = dissect_var_int(tvb(80), block_tree) 
+    local len, tx_count = dissect_var_int(tvb(80), block_tree) 
     local tx_start = 80 + len 
-    for i = 0, count-1 do
-        local tx_tree = block_tree:add('Tx ' .. i)
-        local is_coinbase_tx = i == 0
+    for iTx = 0, tx_count-1 do
+        local tx_tree = block_tree:add('Tx ' .. iTx)
         tx_start = tx_start + dissect_tx(tvb(tx_start), 
                                          pinfo, 
                                          tx_tree, 
-                                         block_version, 
-                                         is_coinbase_tx) 
+                                         block_version,
+                                         iTx) 
     end
 end
 
@@ -662,10 +667,11 @@ msg_dissectors.sendcmpct = function (tvb, pinfo, tree)
     subtree:add_le(fields.sendcmpct_version, tvb(1, 8))
 end
 
-function dissect_prefilled_tx(tvb, pinfo, tree, block_version, is_coinbase_tx)
+function dissect_prefilled_tx(tvb, pinfo, tree, block_version)
     local subtree = tree:add('Prefilled Tx')
-    local len, n = dissect_var_int(tvb, subtree, block_version, is_coinbase_tx)
-    return dissect_tx(tvb(n+len), pinfo, subtree)
+    local len, n = dissect_var_int(tvb, subtree)
+    local iTx = 0
+    return dissect_tx(tvb(n+len), pinfo, subtree, block_version, iTx)
 end
 
 msg_dissectors.cmpctblock = function (tvb, pinfo, tree)
@@ -679,7 +685,6 @@ msg_dissectors.cmpctblock = function (tvb, pinfo, tree)
     offset = offset + 8
     local len, n = dissect_var_int(tvb(offset), hasi_tree)
     offset = offset + len
---  short ids
     for i=0, n-1 do 
        offset = offset + 6 
     end
@@ -687,7 +692,7 @@ msg_dissectors.cmpctblock = function (tvb, pinfo, tree)
     len, n = dissect_var_int(tvb(offset), hasi_tree)
     offset = offset + len
     for i=0, n-1 do 
-       len = dissect_prefilled_tx(tvb(offset), pinfo, hasi_tree, block_version, false) -- cjg
+       len = dissect_prefilled_tx(tvb(offset), pinfo, hasi_tree, block_version, 0)
        offset = offset + len 
     end
 end
