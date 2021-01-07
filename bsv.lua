@@ -713,26 +713,31 @@ function dissect_inventory_vector(tvb, pinfo, tree)
     
 end
 
-function get_payload_length(tvb)
+function body_length(tvb)
     return tvb:le_uint()
 end
 
 function dissect_msg(tvb, pinfo, subtree)
     
     local seg_len = tvb:len()
+    print('\t\tseg_len: ' .. seg_len)
     if seg_len < header_len then 
         return 0, header_len
     end
 
-    local cmd = dissect_header(tvb, pinfo, subtree)
-    local payload_len = get_payload_length(tvb(16, 4)) 
-    local msg_len = header_len + payload_len
+    local body_len = body_length(tvb(16, 4)) 
+    local msg_len = header_len + body_len
+    print('\t\theader len: ' .. header_len)
+    print('\t\tbody len: ' .. body_len)
+    print('\t\tmsg len: ' .. msg_len)
 
     if(msg_len > seg_len) then
-        return 0, payload_len 
+        return 0, msg_len 
     end
+        
+    local cmd = dissect_header(tvb, pinfo, subtree)
 
-    if payload_len > 0 then
+    if body_len > 0 then
         local cmd_dissector = msg_dissectors[cmd]
         if cmd_dissector ~= nil then
             cmd_dissector(tvb(header_len), pinfo, subtree)
@@ -741,25 +746,33 @@ function dissect_msg(tvb, pinfo, subtree)
         end
     end
     
-    return header_len + payload_len, 0
+    return msg_len, 0
 end
 
 function bsv_protocol.dissector(tvb, pinfo, tree)
     local seg_len = tvb:len()
+    print('packet # ' .. pinfo.number)
+    print('seg_len: ' .. seg_len)
 
     pinfo.cols.protocol = bsv_protocol.name
 
     local subtree = tree:add(bsv_protocol, tvb(), "Bitcoin SV")
 
+    --see https://wiki.wireshark.org/Lua/Dissectors
     local offset = 0
     while offset < seg_len do
-        local len, reqd = dissect_msg(tvb(offset), pinfo, subtree)
-        if len == 0 then
-            pinfo.desegment_len = reqd
-            pinfo.desegment_offset = offset 
+        local msg_read, msg_requires = dissect_msg(tvb(offset), pinfo, subtree)
+        offset = offset + msg_read
+        print('\tmsg_read: ' .. msg_read)
+        print('\tmsg_requires: ' .. msg_requires)
+        print('\toffset: ' .. offset)
+        if msg_read == 0 then
+            pinfo.desegment_len = msg_requires - seg_len
+            print('desegment_len: ' .. msg_requires)
+            pinfo.desegment_offset = offset
+            print('desegment_offset: ' .. offset)
             return 
         end
-        offset = offset + len
     end
 end
 
