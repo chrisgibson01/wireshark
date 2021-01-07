@@ -167,6 +167,11 @@ local inv_type =
 
 local fields = {}
 
+fields.var_int1 = ProtoField.uint8("bsv.var_int_1", "var_int")
+fields.var_int2 = ProtoField.uint16("bsv.var_int_2", "var_int")
+fields.var_int4 = ProtoField.uint32("bsv.var_int_4", "var_int")
+fields.var_int8 = ProtoField.uint64("bsv.var_int_8", "var_int")
+
 fields.ping_nonce = ProtoField.uint64("bsv.ping.nonce", "Random Nonce")
 fields.pong_nonce = ProtoField.uint64("bsv.pong.nonce", "Reply Nonce")
 
@@ -182,15 +187,13 @@ fields.magic = ProtoField.uint32("bsv.header.magic", "Magic", base.HEX, magic)
 fields.cmd = ProtoField.string("bsv.header.cmd", "Command")
 fields.length = ProtoField.uint32("bsv.header.length", "Length")
 fields.checksum = ProtoField.bytes("bsv.header.checksum", "Checksum")
-fields.inv_type = ProtoField.uint32("bsv.inv.type", "Type", base.HEX, inv_type)
+
 fields.hash = ProtoField.bytes("bsv.hash", "Hash")
 
-fields.getheaders_version = ProtoField.uint32("bsv.getheaders.version", "Version")
+fields.inv_type = ProtoField.uint32("bsv.inv.type", "Type", base.HEX, inv_type)
+fields.inv_hash = ProtoField.bytes("bsv.inv.hash", "Hash")
 
-fields.var_int1 = ProtoField.uint8("bsv.var_int_1", "var_int")
-fields.var_int2 = ProtoField.uint16("bsv.var_int_2", "var_int")
-fields.var_int4 = ProtoField.uint32("bsv.var_int_4", "var_int")
-fields.var_int8 = ProtoField.uint64("bsv.var_int_8", "var_int")
+fields.getheaders_version = ProtoField.uint32("bsv.getheaders.version", "Version")
 
 fields.out_point_index = ProtoField.uint32("bsv.out_point.index", "Index", base.HEX)
 
@@ -581,7 +584,7 @@ msg_dissectors.inv = function (tvb, pinfo, tree)
     for i=0, n-1 do 
         subtree:add_le(fields.inv_type, tvb(offset, 4))
         offset = offset + 4
-        subtree:add(fields.hash, tvb(offset, 32))
+        subtree:add(fields.inv_hash, tvb(offset, 32))
         offset = offset + 32
     end
 end
