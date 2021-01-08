@@ -735,7 +735,7 @@ function tofan_magic_bytes(tvb)
     return false
 end
 
-function dissect_msg(tvb, pinfo, subtree)
+function dissect_msg(tvb, pinfo, sv_tree)
     
     local seg_len = tvb:len()
     print('\t\tseg_len: ' .. seg_len)
@@ -760,13 +760,15 @@ function dissect_msg(tvb, pinfo, subtree)
     if(msg_len > seg_len) then
         return 0, msg_len 
     end
+
+    local msg_tree = sv_tree:add('msg')
         
-    local cmd = dissect_header(tvb, pinfo, subtree)
+    local cmd = dissect_header(tvb, pinfo, msg_tree)
 
     if body_len > 0 then
         local cmd_dissector = msg_dissectors[cmd]
         if cmd_dissector ~= nil then
-            cmd_dissector(tvb(header_len), pinfo, subtree)
+            cmd_dissector(tvb(header_len), pinfo, msg_tree)
         else
             msg_dissectors.unknown(cmd, pinfo)
         end
