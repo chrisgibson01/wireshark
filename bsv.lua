@@ -721,13 +721,13 @@ end
 function tofan_magic_bytes(tvb)
     
     local b = tvb(0, 4):uint()
-    print('bytes ' .. string.format('%x', b))
+    --print('bytes ' .. string.format('%x', b))
 
     for k, v in pairs(magic) do
-        print('key ' .. string.format('%x', k))
+        --print('key ' .. string.format('%x', k))
 
         if(b == k) then
-            print('return true :-)')
+            --print('return true :-)')
             return true
         end
 
@@ -735,6 +735,7 @@ function tofan_magic_bytes(tvb)
     return false
 end
 
+-- returns number bytes dissected, msg length 
 function dissect_msg(tvb, pinfo, sv_tree)
     
     local seg_len = tvb:len()
@@ -774,7 +775,7 @@ function dissect_msg(tvb, pinfo, sv_tree)
         end
     end
     
-    return msg_len, 0
+    return msg_len, msg_len
 end
 
 function bsv_protocol.dissector(tvb, pinfo, tree)
@@ -789,16 +790,16 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
     --see https://wiki.wireshark.org/Lua/Dissectors
     local offset = 0
     while offset < seg_len do
-        local msg_read, msg_requires = dissect_msg(tvb(offset), pinfo, subtree)
+        local msg_read, msg_len = dissect_msg(tvb(offset), pinfo, subtree)
         offset = offset + msg_read
         print('\tmsg_read: ' .. msg_read)
-        print('\tmsg_requires: ' .. msg_requires)
+        print('\tmsg_len: ' .. msg_len)
         print('\toffset: ' .. offset)
         if msg_read == 0 then
-            pinfo.desegment_len = msg_requires - seg_len
-            print('desegment_len: ' .. msg_requires)
+            pinfo.desegment_len = offset + msg_len - seg_len 
+            print('\tdesegment_len: ' .. pinfo.desegment_len)
             pinfo.desegment_offset = offset
-            print('desegment_offset: ' .. offset)
+            print('\tdesegment_offset: ' .. pinfo.desegment_offset)
             return 
         end
     end
