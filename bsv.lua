@@ -718,19 +718,12 @@ function body_length(tvb)
 end
 
 -- pre-condition length(tvb) >= 4
-function tofan_magic_bytes(tvb)
-    
+function valid_magic_bytes(tvb)
     local b = tvb(0, 4):uint()
-    --print('bytes ' .. string.format('%x', b))
-
     for k, v in pairs(magic) do
-        --print('key ' .. string.format('%x', k))
-
         if(b == k) then
-            --print('return true :-)')
             return true
         end
-
     end
     return false
 end
@@ -739,10 +732,8 @@ end
 function dissect_msg(tvb, pinfo, sv_tree)
     
     local seg_len = tvb:len()
-    print('\t\tseg_len: ' .. seg_len)
-
     if seg_len >= 4 then 
-        if not tofan_magic_bytes(tvb) then
+        if not valid_magic_bytes(tvb) then
             pinfo.cols.info = 'unrecognised magic bytes'
             return seg_len, 0 -- This is not a sv message
         end
@@ -754,9 +745,6 @@ function dissect_msg(tvb, pinfo, sv_tree)
 
     local body_len = body_length(tvb(16, 4)) 
     local msg_len = header_len + body_len
-    print('\t\theader len: ' .. header_len)
-    print('\t\tbody len: ' .. body_len)
-    print('\t\tmsg len: ' .. msg_len)
 
     if(msg_len > seg_len) then
         return 0, msg_len 
@@ -780,8 +768,6 @@ end
 
 function bsv_protocol.dissector(tvb, pinfo, tree)
     local seg_len = tvb:len()
-    print('packet # ' .. pinfo.number)
-    print('seg_len: ' .. seg_len)
 
     pinfo.cols.protocol = bsv_protocol.name
 
@@ -792,14 +778,9 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
     while offset < seg_len do
         local msg_read, msg_len = dissect_msg(tvb(offset), pinfo, subtree)
         offset = offset + msg_read
-        print('\tmsg_read: ' .. msg_read)
-        print('\tmsg_len: ' .. msg_len)
-        print('\toffset: ' .. offset)
         if msg_read == 0 then
             pinfo.desegment_len = offset + msg_len - seg_len 
-            print('\tdesegment_len: ' .. pinfo.desegment_len)
             pinfo.desegment_offset = offset
-            print('\tdesegment_offset: ' .. pinfo.desegment_offset)
             return 
         end
     end
