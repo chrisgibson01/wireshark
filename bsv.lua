@@ -717,10 +717,36 @@ function body_length(tvb)
     return tvb:le_uint()
 end
 
+-- pre-condition length(tvb) >= 4
+function tofan_magic_bytes(tvb)
+    
+    local b = tvb(0, 4):uint()
+    print('bytes ' .. string.format('%x', b))
+
+    for k, v in pairs(magic) do
+        print('key ' .. string.format('%x', k))
+
+        if(b == k) then
+            print('return true :-)')
+            return true
+        end
+
+    end
+    return false
+end
+
 function dissect_msg(tvb, pinfo, subtree)
     
     local seg_len = tvb:len()
     print('\t\tseg_len: ' .. seg_len)
+
+    if seg_len >= 4 then 
+        if not tofan_magic_bytes(tvb) then
+            pinfo.cols.info = 'unrecognised magic bytes'
+            return seg_len, 0 -- This is not a sv message
+        end
+    end
+
     if seg_len < header_len then 
         return 0, header_len
     end
