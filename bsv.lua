@@ -455,7 +455,7 @@ function dissect_coinbase_data(tvb, pinfo, tree)
 end
 
 function dissect_unlocking_script(tvb, pinfo, tree)
-    local subtree = tree:add('Unlocking Script')
+    local subtree = tree:add('Unlocking Script/scriptSig/witness')
     return dissect_script(tvb, subtree)
 end
 
@@ -481,7 +481,7 @@ function dissect_tx_out(tvb, tree, index)
 
     subtree:add_le(fields.tx_out_value, tvb(0, 8))
 
-    local pub_key_tree = subtree:add('Locking script')
+    local pub_key_tree = subtree:add('Locking Script/scriptPubKey/Witness Script')
 
     local n = dissect_script(tvb(8), pub_key_tree)
     return 8 + n
