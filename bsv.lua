@@ -215,7 +215,20 @@ fields.tx_script_der_len = ProtoField.uint8("bsv.tx.script.der.len", "Length")
 fields.tx_script_der_type = ProtoField.uint8("bsv.tx.script.der.type", "Type")
 fields.tx_script_der_r = ProtoField.bytes("bsv.tx.script.der.r", "R")
 fields.tx_script_der_s = ProtoField.bytes("bsv.tx.script.der.s", "S")
-fields.tx_script_der_sighash = ProtoField.uint8("bsv.tx.script.der.sighash", "Signature Hash")
+
+local sig_hash =
+{
+    [0x1] = 'ALL',
+    [0x2] = 'NONE',
+    [0x3] = 'SINGLE',
+    [0x81] = 'ALL | ANYONECANPAY',
+    [0x82] = 'NONE | ANYONECANPAY',
+    [0x83] = 'SINGLE | ANYONECANPAY',
+}
+fields.tx_script_sighash = ProtoField.uint8("bsv.tx.script.sighash", 
+                                            "Signature Hash",
+                                            base.HEX, 
+                                            sig_hash)
 fields.tx_lock_time = ProtoField.absolute_time("bsv.tx_out.lock_time", "Lock Time")
 fields.tx_lock_block = ProtoField.uint32("bsv.tx_out.lock_block", "Lock Time Block")
 
@@ -339,27 +352,28 @@ end
 -- see BIP_0062
 function dissect_digital_signature(tvb, tree)
     local subtree = tree:add('Digital Signature')
-
+    local der_tree = subtree:add('Distinguished Encoding Rules (DER)')
     local offset = 0
-    subtree:add(fields.tx_script_der_start, tvb(offset, 1))
+    der_tree:add(fields.tx_script_der_start, tvb(offset, 1))
     offset = offset + 1
-    subtree:add(fields.tx_script_der_len, tvb(offset, 1))
+    der_tree:add(fields.tx_script_der_len, tvb(offset, 1))
     offset = offset + 1
-    subtree:add(fields.tx_script_der_type, tvb(offset, 1))
+    der_tree:add(fields.tx_script_der_type, tvb(offset, 1))
     offset = offset + 1
     local len = tvb(offset, 1):uint()
-    subtree:add(fields.tx_script_der_len, tvb(offset, 1))
+    der_tree:add(fields.tx_script_der_len, tvb(offset, 1))
     offset = offset + 1
-    subtree:add(fields.tx_script_der_r, tvb(offset, len)) 
+    der_tree:add(fields.tx_script_der_r, tvb(offset, len)) 
     offset = offset + len
-    subtree:add(fields.tx_script_der_type, tvb(offset, 1))
+    der_tree:add(fields.tx_script_der_type, tvb(offset, 1))
     offset = offset + 1
     len = tvb(offset, 1):uint()
-    subtree:add(fields.tx_script_der_len, tvb(offset, 1))
+    der_tree:add(fields.tx_script_der_len, tvb(offset, 1))
     offset = offset + 1
-    subtree:add(fields.tx_script_der_s, tvb(offset, len)) 
+    der_tree:add(fields.tx_script_der_s, tvb(offset, len)) 
     offset = offset + len
-    subtree:add(fields.tx_script_der_sighash, tvb(offset, 1)) 
+
+    subtree:add(fields.tx_script_sighash, tvb(offset, 1)) 
 end
 
 function dissect_public_key(tvb, tree) 
