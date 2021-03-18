@@ -218,12 +218,12 @@ fields.tx_script_der_s = ProtoField.bytes("bsv.tx.script.der.s", "S")
 
 local sig_hash =
 {
-    [0x1] = 'ALL',
-    [0x2] = 'NONE',
-    [0x3] = 'SINGLE',
-    [0x81] = 'ALL | ANYONECANPAY',
-    [0x82] = 'NONE | ANYONECANPAY',
-    [0x83] = 'SINGLE | ANYONECANPAY',
+    [0x1] = 'ALL = (all inputs, all outputs)',
+    [0x2] = 'NONE = (all inputs, no outputs)',
+    [0x3] = 'SINGLE (all inputs, this output)',
+    [0x81] = 'ANYONECANPAY | ALL (this input, all outputs)',
+    [0x82] = 'ANYONECANPAY | NONE (this input, no outputs)',
+    [0x83] = 'ANYONECANPAY | SINGLE (this input, this output)',
 }
 fields.tx_script_sighash = ProtoField.uint8("bsv.tx.script.sighash", 
                                             "Signature Hash",
