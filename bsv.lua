@@ -285,7 +285,7 @@ function var_int(tvb)
     end
 end
 
-function dissect_var_int(tvb, tree) -- cjg rename this adds a var_int to a tree
+function dissect_var_int(tvb, tree) -- cjg rename, adds a var_int to a tree
     local len, n = var_int(tvb)
     if len == 1 then
         tree:add(fields.var_int1, tvb(0, len))
