@@ -257,7 +257,7 @@ fields.network_address_port = ProtoField.uint16("bsv.network_addr.port", "Port")
 fields.network_address_services = ProtoField.bytes("bsv.network_addr.services", "Services")
 fields.network_address_ip = ProtoField.ipv6("bsv.network_addr.ip", "IP Address")
 
-fields.sendcmpct_on = ProtoField.uint8("bsv.sendcmpct.on", "Enable")
+fields.sendcmpct_on = ProtoField.uint8("bsv.sendcmpct.on", "High Bandwidth Relaying")
 fields.sendcmpct_version = ProtoField.uint64("bsv.sendcmpct.version", "Version")
 
 fields.satoshis_per_kb = ProtoField.int64("bsv.feefilter", "Minimum Satoshis/kb")
