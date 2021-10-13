@@ -264,6 +264,13 @@ fields.satoshis_per_kb = ProtoField.int64("bsv.feefilter", "Minimum Satoshis/kb"
 
 fields.hasids_nonce = ProtoField.uint64("bsv.header_and_short_ids.nonce", "Nonce")
 
+fields.dsdetected_version = ProtoField.uint16("bsv.dsdetected.version", "Version")
+fields.dsdetected_mp_flags = ProtoField.uint16("bsv.dsdetected.merkle_proof.flags", "Flags")
+fields.dsdetected_mp_tx = ProtoField.bytes("bsv.dsdetected.merkle_proof.tx", "Tx")
+fields.dsdetected_mp_merkle_root = ProtoField.bytes("bsv.dsdetected.merkle_proof.merkle_root", "Merkle Root")
+fields.dsdetected_mp_node_type = ProtoField.uint8("bsv.dsdetected.merkle_proof.node.type", "Type")
+fields.dsdetected_mp_node_value = ProtoField.bytes("bsv.dsdetected.merkle_proof.node.value", "Value")
+
 msg_dissectors = {}
 
 bsv_protocol.fields = fields
@@ -637,24 +644,11 @@ msg_dissectors.headers = function(tvb, pinfo, tree)
 
     local subtree = tree:add("Block Headers")
     local len, n = dissect_var_int(tvb, subtree)
-    
     local offset = len
     for i=0, n-1 do
         local blockTree = subtree:add('Block Header: ' .. i)
-        blockTree:add(fields.block_version, tvb(offset, 4))
-        offset = offset + 4 
-        blockTree:add(fields.block_prev_block, tvb(offset, 32))
-        offset = offset + 32
-        blockTree:add(fields.block_merkle_root, tvb(offset, 32))
-        offset = offset + 32
-        blockTree:add_le(fields.block_timestamp, tvb(offset, 4))
-        offset = offset + 4
-        dissect_target(tvb(offset, 4), blockTree)
-        offset = offset + 4
-        blockTree:add_le(fields.block_nonce, tvb(offset, 4))
-        offset = offset + 4
-        local len = dissect_var_int(tvb(offset), blockTree)
-        offset = offset + len
+        offset = offset + dissect_block_header(tvb(offset), blockTree)
+        offset = offset + dissect_var_int(tvb(offset), blockTree)
     end
     
 end
@@ -717,6 +711,72 @@ end
 msg_dissectors.feefilter = function (tvb, pinfo, tree)
     pinfo.cols.info = 'feefilter'
     tree:add_le(fields.satoshis_per_kb, tvb(0, 8))
+end
+
+function dissect_header_list(tvb, tree)
+    local subtree = tree:add('Header List')
+    local offset, n = dissect_var_int(tvb, subtree)
+    for i=0, n-1 do
+        local len, _ = dissect_block_header(tvb(offset), subtree)
+        offset = offset + len
+    end
+    return offset
+end
+
+function dissect_merkle_proof(tvb, tree)
+    local subtree = tree:add('Merkle Proof')
+    subtree:add(fields.dsdetected_mp_flags, tvb(0, 1))
+    
+    local offset = 1
+    local len, tx_index = var_int(tvb(offset))
+    offset = offset + len
+    subtree:add('Tx Index', tx_index)
+    
+    local len2, tx_len = var_int(tvb(offset))
+    offset = offset + len2
+    subtree:add('Tx Length', tx_len)
+   
+    subtree:add(fields.dsdetected_mp_tx, tvb(offset, tx_len))
+    offset = offset + tx_len
+    subtree:add(fields.dsdetected_mp_merkle_root, tvb(offset, 32))
+    offset = offset + 32
+
+    local len3, node_count = var_int(tvb(offset))
+    offset = offset + len3
+    subtree:add('Node Count', node_count)
+
+    for i=0, node_count-1 do
+        subtree:add(fields.dsdetected_mp_node_type, tvb(offset, 1))
+        offset = offset + 1
+        -- assume type 0 i.e. 32 byte value
+        subtree:add(fields.dsdetected_mp_node_value, tvb(offset, 32))
+        offset = offset + 32 
+    end
+    return offset
+end
+
+function dissect_block_details(tvb, tree)
+    local subtree = tree:add('Block Detail')
+    local offset = dissect_header_list(tvb, subtree)
+    --return offset + dissect_merkle_proof(tvb(offset), subtree)
+    local len = dissect_merkle_proof(tvb(offset), subtree)
+    return offset + len
+end
+
+msg_dissectors.dsdetected = function (tvb, pinfo, tree)
+    pinfo.cols.info = 'dsdetected'
+    
+    tree:add_le(fields.dsdetected_version, tvb(0, 2))
+    local offset = 2
+
+    local len, n = dissect_var_int(tvb(offset), tree)
+    offset = offset + len
+
+    local subtree = tree:add('Block Details')
+    for i=0, n-1 do
+        len = dissect_block_details(tvb(offset), subtree)        
+        offset = offset + len
+    end
 end
 
 msg_dissectors.unknown = function(cmd, pinfo)
