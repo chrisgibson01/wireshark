@@ -187,6 +187,8 @@ fields.magic = ProtoField.uint32("bsv.header.magic", "Magic", base.HEX, magic)
 fields.cmd = ProtoField.string("bsv.header.cmd", "Command")
 fields.length = ProtoField.uint32("bsv.header.length", "Length")
 fields.checksum = ProtoField.bytes("bsv.header.checksum", "Checksum")
+fields.ext_cmd = ProtoField.string("bsv.header.ext_cmd", "Extended Command")
+fields.ext_length = ProtoField.uint64("bsv.header.ext_length", "Extended Length")
 
 fields.hash = ProtoField.bytes("bsv.hash", "Hash")
 
@@ -275,7 +277,7 @@ msg_dissectors = {}
 
 bsv_protocol.fields = fields
 
-local header_len = 24
+local min_header_len = 24
 
 function var_int(tvb)
     local n = tvb(0, 1):uint()
@@ -579,9 +581,13 @@ msg_dissectors.block = function(tvb, pinfo, tree)
     end
 end
 
+function is_ext_header(tvb)
+    return tvb(16, 4):le_uint() == 0xffffffff 
+end
+
 function dissect_header(tvb, pinfo, tree)
     local length = tvb:len()
-    assert(length >= header_len)
+    assert(length >= min_header_len)
     
     local subtree = tree:add("Header")
     subtree:add(fields.magic, tvb(0, 4))
@@ -590,6 +596,13 @@ function dissect_header(tvb, pinfo, tree)
     subtree:add(fields.checksum, tvb(20, 4))
 
     local cmd = tvb:range(4, 12):stringz() 
+
+    if is_ext_header(tvb) then
+        subtree:add(fields.ext_cmd, tvb(24, 12))
+        subtree:add_le(fields.ext_length, tvb(36, 8))
+        cmd = tvb:range(24, 12):stringz() .. ' (Ext. Msg.)'
+    end
+    
     pinfo.cols.info = cmd
     return cmd
 end
@@ -787,8 +800,23 @@ function dissect_inventory_vector(tvb, pinfo, tree)
     
 end
 
+function header_length(tvb)
+    if is_ext_header(tvb) then
+        return 44        
+    else
+        return 24
+    end
+end
+
 function body_length(tvb)
-    return tvb:le_uint()
+    if is_ext_header(tvb) then
+        -- Wireshark doesn't seem to be able to handle >4gb application messages
+        -- Therefore, just show the extended headers
+        --return tvb(36, 8):le_uint64()
+        return 0
+    else
+        return tvb(16, 4):le_uint()
+    end
 end
 
 -- pre-condition length(tvb) >= 4
@@ -813,13 +841,17 @@ function dissect_msg(tvb, pinfo, sv_tree)
         end
     end
 
-    if seg_len < header_len then 
-        return 0, header_len
+    if seg_len < min_header_len then 
+        return 0, min_header_len
     end
 
-    local body_len = body_length(tvb(16, 4)) 
-    local msg_len = header_len + body_len
+    local header_len = header_length(tvb)
+    if seg_len < header_len then
+        return 0, header_length
+    end 
 
+    local body_len = body_length(tvb) 
+    local msg_len = header_len + body_len
     if(msg_len > seg_len) then
         return 0, msg_len 
     end
@@ -853,6 +885,7 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
         local msg_read, msg_len = dissect_msg(tvb(offset), pinfo, subtree)
         offset = offset + msg_read
         if msg_read == 0 then
+
             pinfo.desegment_len = offset + msg_len - seg_len 
             pinfo.desegment_offset = offset
             return 
