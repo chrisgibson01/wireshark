@@ -272,6 +272,21 @@ fields.dsdetected_mp_tx = ProtoField.bytes("bsv.dsdetected.merkle_proof.tx", "Tx
 fields.dsdetected_mp_merkle_root = ProtoField.bytes("bsv.dsdetected.merkle_proof.merkle_root", "Merkle Root")
 fields.dsdetected_mp_node_type = ProtoField.uint8("bsv.dsdetected.merkle_proof.node.type", "Type")
 fields.dsdetected_mp_node_value = ProtoField.bytes("bsv.dsdetected.merkle_proof.node.value", "Value")
+    
+
+fields.createstrm_assoc_id = ProtoField.bytes("bsv.createstrm.assoc_id", "Assoc. ID")
+local stream_type =
+{
+    [0] = 'UNKNOWN',
+    [1] = 'GENERAL',
+    [2] = 'DATA1',
+    [3] = 'DATA2',
+    [4] = 'DATA3',
+    [5] = 'DATA4'
+}
+fields.createstrm_stream_type = ProtoField.uint8("bsv.createstrm.assoc_id", "Assoc. stream type", base.HEX, stream_type)
+fields.createstrm_stream_policy = ProtoField.string("bsv.createstrm.policy", "Assoc. stream policy")
+
 
 msg_dissectors = {}
 
@@ -562,6 +577,32 @@ function dissect_block_header(tvb, tree)
     dissect_target(tvb(72, 4), subtree)
     subtree:add_le(fields.block_nonce, tvb(76, 4))
     return 80, block_version
+end
+
+msg_dissectors.createstrm = function(tvb, pinfo, tree)
+    pinfo.cols.info = 'createstrm'
+
+    local subtree = tree:add("createstream")
+    local offset, n = dissect_var_int(tvb, subtree)
+
+    subtree:add(fields.createstrm_assoc_id, tvb(offset, n))
+    offset = offset + n
+    subtree:add(fields.createstrm_stream_type, tvb(offset, 1))
+    offset = offset + 1
+    local len, m = dissect_var_int(tvb(offset), subtree)
+    offset = offset + len
+    subtree:add(fields.createstrm_stream_policy, tvb(offset, m))
+end
+
+msg_dissectors.streamack = function(tvb, pinfo, tree)
+    pinfo.cols.info = 'streamack'
+
+    local subtree = tree:add("streamack")
+    local offset, n = dissect_var_int(tvb, subtree)
+
+    subtree:add(fields.createstrm_assoc_id, tvb(offset, n))
+    offset = offset + n
+    subtree:add(fields.createstrm_stream_type, tvb(offset, 1))
 end
 
 msg_dissectors.block = function(tvb, pinfo, tree)
