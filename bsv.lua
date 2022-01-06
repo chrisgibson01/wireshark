@@ -267,12 +267,14 @@ fields.satoshis_per_kb = ProtoField.int64("bsv.feefilter", "Minimum Satoshis/kb"
 fields.hasids_nonce = ProtoField.uint64("bsv.header_and_short_ids.nonce", "Nonce")
 
 fields.dsdetected_version = ProtoField.uint16("bsv.dsdetected.version", "Version")
-fields.dsdetected_mp_flags = ProtoField.uint16("bsv.dsdetected.merkle_proof.flags", "Flags")
+fields.dsdetected_mp_flags = ProtoField.uint8("bsv.dsdetected.merkle_proof.flags", "Flags")
 fields.dsdetected_mp_tx = ProtoField.bytes("bsv.dsdetected.merkle_proof.tx", "Tx")
 fields.dsdetected_mp_merkle_root = ProtoField.bytes("bsv.dsdetected.merkle_proof.merkle_root", "Merkle Root")
 fields.dsdetected_mp_node_type = ProtoField.uint8("bsv.dsdetected.merkle_proof.node.type", "Type")
 fields.dsdetected_mp_node_value = ProtoField.bytes("bsv.dsdetected.merkle_proof.node.value", "Value")
-    
+   
+fields.merkle_proof_txid = ProtoField.bytes("bsv.mp.txid", "txid")
+fields.merkle_proof_target = ProtoField.bytes("bsv.mp.target", "target")
 
 fields.createstrm_assoc_id = ProtoField.bytes("bsv.createstrm.assoc_id", "Assoc. ID")
 local stream_type =
@@ -287,6 +289,8 @@ local stream_type =
 fields.createstrm_stream_type = ProtoField.uint8("bsv.createstrm.assoc_id", "Assoc. stream type", base.HEX, stream_type)
 fields.createstrm_stream_policy = ProtoField.string("bsv.createstrm.policy", "Assoc. stream policy")
 
+fields.hdrsen_no_more_headers = ProtoField.bytes("bsv.hdrsen.no_more_headers", "no_more_headers")
+fields.hdrsen_has_coinbase_data = ProtoField.bytes("bsv.hdrsen.has_coinbase_data", "has_coinbase_data")
 
 msg_dissectors = {}
 
@@ -695,7 +699,6 @@ end
 
 msg_dissectors.headers = function(tvb, pinfo, tree) 
     pinfo.cols.info = 'headers'
-
     local subtree = tree:add("Block Headers")
     local len, n = dissect_var_int(tvb, subtree)
     local offset = len
@@ -704,13 +707,44 @@ msg_dissectors.headers = function(tvb, pinfo, tree)
         offset = offset + dissect_block_header(tvb(offset), blockTree)
         offset = offset + dissect_var_int(tvb(offset), blockTree)
     end
+    return offset
+end
+
+msg_dissectors.hdrsen = function(tvb, pinfo, tree) 
+    pinfo.cols.info = 'hdrsen'
+
+    local subtree = tree:add("Enhanced Block Headers")
+    local len, n = dissect_var_int(tvb, subtree)
+    local offset = len
+    for i=0, n-1 do
+        local blockTree = subtree:add('Enhanced Block Header: ' .. i)
+        offset = offset + dissect_block_header(tvb(offset), blockTree)
+        offset = offset + dissect_var_int(tvb(offset), blockTree)
     
+        blockTree:add(fields.hdrsen_no_more_headers, tvb(offset, 1)) 
+        offset = offset + 1
+        blockTree:add(fields.hdrsen_has_coinbase_data, tvb(offset, 1)) 
+        local has_coinbase_data = tvb(offset, 1):uint()
+        offset = offset + 1
+       
+        if has_coinbase_data ~= 0 then
+            offset = offset + dissect_merkle_proof2(tvb(offset), blockTree)
+
+            local block_version = 0
+            local iTx = 0
+            local txTree = blockTree:add('Tx')
+            offset = offset + dissect_tx(tvb(offset), pinfo, txTree, block_version, iTx)
+        end
+    end
+    return offset
+
 end
 
 msg_dissectors.ping = function(tvb, pinfo, tree) 
     pinfo.cols.info = 'ping'
     tree:add(fields.ping_nonce, tvb(0, 8))
 end
+
 msg_dissectors.pong = function(tvb, pinfo, tree) 
     tree:add(fields.pong_nonce, tvb(0, 8))
     pinfo.cols.info = 'pong'
@@ -807,6 +841,71 @@ function dissect_merkle_proof(tvb, tree)
         offset = offset + 32 
     end
     return offset
+end
+
+function dissect_merkle_proof2(tvb, tree)
+    local subtree = tree:add('Merkle Proof')
+    
+    local offset = 0 
+    subtree:add(fields.dsdetected_mp_flags, tvb(offset, 1))
+    local flags = tvb(offset, 1):le_uint()
+    offset = offset + 1
+
+    local len, n = dissect_var_int(tvb(offset), subtree) --index field
+    offset = offset + len 
+
+    if flags == 0 then
+        subtree:add(fields.merkle_proof_txid, tvb(offset, 32))
+        offset = offset + 32
+    end
+
+    -- cjg & not supported til lua 5.3 (see wireshark->help->about->Wireshark Compiled with...
+    --if flags & 0x6  == 0 then
+        subtree:add(fields.merkle_proof_target, tvb(offset, 32))
+        offset = offset + 32
+    --end
+    
+    local len3, node_count = var_int(tvb(offset))
+    offset = offset + len3
+    subtree:add('Node Count', node_count)
+
+    for i=0, node_count-1 do
+        subtree:add(fields.dsdetected_mp_node_type, tvb(offset, 1))
+        offset = offset + 1
+        -- assume type 0 i.e. 32 byte value
+        subtree:add(fields.dsdetected_mp_node_value, tvb(offset, 32))
+        offset = offset + 32 
+    end
+    return offset
+    --dissect_var_int(tvb(offset), subtree) 
+
+    
+--    local offset = 1
+--    local len, tx_index = var_int(tvb(offset))
+--    offset = offset + len
+--    subtree:add('Tx Index', tx_index)
+--    
+--    local len2, tx_len = var_int(tvb(offset))
+--    offset = offset + len2
+--    subtree:add('Tx Length', tx_len)
+--   
+--    subtree:add(fields.dsdetected_mp_tx, tvb(offset, tx_len))
+--    offset = offset + tx_len
+--    subtree:add(fields.dsdetected_mp_merkle_root, tvb(offset, 32))
+--    offset = offset + 32
+--
+--    local len3, node_count = var_int(tvb(offset))
+--    offset = offset + len3
+--    subtree:add('Node Count', node_count)
+--
+--    for i=0, node_count-1 do
+--        subtree:add(fields.dsdetected_mp_node_type, tvb(offset, 1))
+--        offset = offset + 1
+--        -- assume type 0 i.e. 32 byte value
+--        subtree:add(fields.dsdetected_mp_node_value, tvb(offset, 32))
+--        offset = offset + 32 
+--    end
+--    return offset
 end
 
 function dissect_block_details(tvb, tree)
