@@ -329,6 +329,10 @@ function dissect_var_int(tvb, tree) -- cjg rename, adds a var_int to a tree
     return len, n 
 end
 
+function update_info_col(pinfo, msg)
+    pinfo.cols.info:append(' ' .. msg)
+end
+
 function dissect_network_addr(tvb, pinfo, tree)
     local subtree = tree:add('Network Address')
     subtree:add(fields.network_address_services, tvb(0, 8))
@@ -337,7 +341,6 @@ function dissect_network_addr(tvb, pinfo, tree)
 end
 
 msg_dissectors.version = function(tvb, pinfo, tree)
-    pinfo.cols.info = 'version'
     local subtree = tree:add('Version')
     subtree:add_le(fields.version_version, tvb(0, 4))
     subtree:add(fields.version_services, tvb(4, 8))
@@ -356,9 +359,6 @@ msg_dissectors.version = function(tvb, pinfo, tree)
 end
     
 msg_dissectors.addr = function(tvb, pinfo, tree)
-    
-    pinfo.cols.info = 'addr'
-
     local subtree = tree:add('addr')
     
     local len, n = dissect_var_int(tvb, subtree)
@@ -481,7 +481,7 @@ function dissect_coinbase_data(tvb, pinfo, tree)
     offset = offset + 1
 
     local block_height = tvb(offset, opcode):le_int()
-    pinfo.cols.info:append(' ' .. tostring(block_height))
+    update_info_col(pinfo, tostring(block_height))
     subtree:add_le(fields.tx_in_block_height, tvb(offset, opcode)) 
     offset = offset + opcode
 
@@ -556,7 +556,6 @@ function dissect_tx(tvb, pinfo, tree, block_version, iTx)
 end
 
 msg_dissectors.tx = function(tvb, pinfo, tree)
-    pinfo.cols.info = 'tx'
     local subtree = tree:add('Tx')
     local block_version = 0
     local iTx = 0
@@ -584,8 +583,6 @@ function dissect_block_header(tvb, tree)
 end
 
 msg_dissectors.createstrm = function(tvb, pinfo, tree)
-    pinfo.cols.info = 'createstrm'
-
     local subtree = tree:add("createstream")
     local offset, n = dissect_var_int(tvb, subtree)
 
@@ -599,8 +596,6 @@ msg_dissectors.createstrm = function(tvb, pinfo, tree)
 end
 
 msg_dissectors.streamack = function(tvb, pinfo, tree)
-    pinfo.cols.info = 'streamack'
-
     local subtree = tree:add("streamack")
     local offset, n = dissect_var_int(tvb, subtree)
 
@@ -610,7 +605,6 @@ msg_dissectors.streamack = function(tvb, pinfo, tree)
 end
 
 msg_dissectors.block = function(tvb, pinfo, tree)
-    pinfo.cols.info = 'block'
     local block_tree = tree:add("block")
 
     local _, block_version = dissect_block_header(tvb(0, 80), block_tree)
@@ -648,13 +642,12 @@ function dissect_header(tvb, pinfo, tree)
         cmd = tvb:range(24, 12):stringz() .. ' (Ext. Msg.)'
     end
     
-    pinfo.cols.info = cmd
+    update_info_col(pinfo, cmd)
     return cmd
 end
 
 msg_dissectors.inv = function (tvb, pinfo, tree)
-    pinfo.cols.info = 'inv'
-    
+
     local subtree = tree:add("Inventory Vectors")
 
     local len, n = dissect_var_int(tvb, subtree) 
@@ -669,7 +662,6 @@ msg_dissectors.inv = function (tvb, pinfo, tree)
 end
 
 msg_dissectors.getdata = function (tvb, pinfo, tree)
-    pinfo.cols.info = 'getdata'
     
     local len, n = dissect_var_int(tvb, tree)
     local offset = len 
@@ -696,21 +688,19 @@ function dissect_getheaders_impl(tvb, pinfo, tree)
 end
 
 msg_dissectors.getheaders = function(tvb, pinfo, tree) 
-    pinfo.cols.info = 'getheaders'
 
     local subtree = tree:add("getheaders")
     dissect_getheaders_impl(tvb, pinfo, subtree)
 end
 
 msg_dissectors.gethdrsen = function(tvb, pinfo, tree) 
-    pinfo.cols.info = 'gethdrsen'
 
     local subtree = tree:add("gethdrsen")
     dissect_getheaders_impl(tvb, pinfo, subtree)
 end
 
 msg_dissectors.headers = function(tvb, pinfo, tree) 
-    pinfo.cols.info = 'headers'
+    
     local subtree = tree:add("Block Headers")
     local len, n = dissect_var_int(tvb, subtree)
     local offset = len
@@ -723,7 +713,6 @@ msg_dissectors.headers = function(tvb, pinfo, tree)
 end
 
 msg_dissectors.hdrsen = function(tvb, pinfo, tree) 
-    pinfo.cols.info = 'hdrsen'
 
     local subtree = tree:add("Enhanced Block Headers")
     local len, n = dissect_var_int(tvb, subtree)
@@ -753,17 +742,14 @@ msg_dissectors.hdrsen = function(tvb, pinfo, tree)
 end
 
 msg_dissectors.ping = function(tvb, pinfo, tree) 
-    pinfo.cols.info = 'ping'
     tree:add(fields.ping_nonce, tvb(0, 8))
 end
 
 msg_dissectors.pong = function(tvb, pinfo, tree) 
     tree:add(fields.pong_nonce, tvb(0, 8))
-    pinfo.cols.info = 'pong'
 end
 
 msg_dissectors.protoconf = function (tvb, pinfo, tree)
-    pinfo.cols.info = 'protoconf'
 
     len, n = dissect_var_int(tvb, tree)
     -- cjg
@@ -772,7 +758,6 @@ msg_dissectors.protoconf = function (tvb, pinfo, tree)
 end
 
 msg_dissectors.sendcmpct = function (tvb, pinfo, tree)
-    pinfo.cols.info = 'sendcmpct'
     local subtree = tree:add("Send Compact Blocks")
     subtree:add(fields.sendcmpct_on, tvb(0, 1))
     subtree:add_le(fields.sendcmpct_version, tvb(1, 8))
@@ -786,7 +771,6 @@ function dissect_prefilled_tx(tvb, pinfo, tree, block_version)
 end
 
 msg_dissectors.cmpctblock = function (tvb, pinfo, tree)
-    pinfo.cols.info = 'cmpctblock'
     local subtree = tree:add("Compact Block")
     local hasi_tree = subtree:add("HeaderAndShortIDs")
 
@@ -809,7 +793,6 @@ msg_dissectors.cmpctblock = function (tvb, pinfo, tree)
 end
 
 msg_dissectors.feefilter = function (tvb, pinfo, tree)
-    pinfo.cols.info = 'feefilter'
     tree:add_le(fields.satoshis_per_kb, tvb(0, 8))
 end
 
@@ -929,7 +912,6 @@ function dissect_block_details(tvb, tree)
 end
 
 msg_dissectors.dsdetected = function (tvb, pinfo, tree)
-    pinfo.cols.info = 'dsdetected'
     
     tree:add_le(fields.dsdetected_version, tvb(0, 2))
     local offset = 2
@@ -945,11 +927,7 @@ msg_dissectors.dsdetected = function (tvb, pinfo, tree)
 end
 
 msg_dissectors.unknown = function(cmd, pinfo)
-    pinfo.cols.info = '*** ' .. cmd .. ' dissector not yet implemented ***'
-end
-
-function dissect_inventory_vector(tvb, pinfo, tree)
-    
+    update_info_col(pinfo, '*** dissector not yet implemented ***')
 end
 
 function header_length(tvb)
@@ -988,7 +966,7 @@ function dissect_msg(tvb, pinfo, sv_tree)
     local seg_len = tvb:len()
     if seg_len >= 4 then 
         if not valid_magic_bytes(tvb) then
-            pinfo.cols.info = 'unrecognised magic bytes'
+            update_info_col(pinfo, 'unrecognised magic bytes')
             return seg_len, 0 -- This is not a sv message
         end
     end
@@ -1028,7 +1006,8 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
     local seg_len = tvb:len()
 
     pinfo.cols.protocol = bsv_protocol.name
-
+    pinfo.cols.info = ''
+    
     local subtree = tree:add(bsv_protocol, tvb(), "Bitcoin SV")
 
     --see https://wiki.wireshark.org/Lua/Dissectors
@@ -1037,7 +1016,6 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
         local msg_read, msg_len = dissect_msg(tvb(offset), pinfo, subtree)
         offset = offset + msg_read
         if msg_read == 0 then
-
             pinfo.desegment_len = offset + msg_len - seg_len 
             pinfo.desegment_offset = offset
             return 
