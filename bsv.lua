@@ -681,20 +681,32 @@ msg_dissectors.getdata = function (tvb, pinfo, tree)
     end
 end
 
-msg_dissectors.getheaders = function(tvb, pinfo, tree) 
-    pinfo.cols.info = 'getheaders'
-
-    local subtree = tree:add("getheaders")
-    subtree:add_le(fields.getheaders_version, tvb(0, 4)) 
-    local len, n  = dissect_var_int(tvb(4), subtree)
+function dissect_getheaders_impl(tvb, pinfo, tree)
+    tree:add_le(fields.getheaders_version, tvb(0, 4)) 
+    
+    local len, n  = dissect_var_int(tvb(4), tree)
     local offset = 4 + len
     for i=0, n-1 do
-        subtree:add(fields.hash, tvb(offset, 32))
+        tree:add(fields.hash, tvb(offset, 32))
         offset = offset + 32
     end
     
     -- hash stop 
-    subtree:add(fields.hash, tvb(offset, 32))
+    tree:add(fields.hash, tvb(offset, 32))
+end
+
+msg_dissectors.getheaders = function(tvb, pinfo, tree) 
+    pinfo.cols.info = 'getheaders'
+
+    local subtree = tree:add("getheaders")
+    dissect_getheaders_impl(tvb, pinfo, subtree)
+end
+
+msg_dissectors.gethdrsen = function(tvb, pinfo, tree) 
+    pinfo.cols.info = 'gethdrsen'
+
+    local subtree = tree:add("gethdrsen")
+    dissect_getheaders_impl(tvb, pinfo, subtree)
 end
 
 msg_dissectors.headers = function(tvb, pinfo, tree) 
