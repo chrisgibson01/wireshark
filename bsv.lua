@@ -419,7 +419,10 @@ end
 function dissect_data(tvb, tree)
     local len = tvb:len()
     local start = tvb(0, 1):uint()
-    if len == 20 then 
+
+    if len < 20 then
+        tree:add(fields.tx_script_data, tvb) -- cjg
+    elseif len == 20 then 
         dissect_public_key_hash(tvb, tree)
     elseif len == 33 then --cjg
         dissect_public_key(tvb, tree)
