@@ -168,6 +168,7 @@ local inv_type =
 local fields = {}
 
 fields.block_tx_request_block_hash = ProtoField.bytes("bsv.block_tx_request", "Block Tx Request")
+fields.block_txs_block_hash = ProtoField.bytes("bsv.block_txs", "Block Txs")
 
 fields.var_int1 = ProtoField.uint8("bsv.var_int_1", "var_int")
 fields.var_int2 = ProtoField.uint16("bsv.var_int_2", "var_int")
@@ -589,7 +590,6 @@ end
 
 msg_dissectors.getblocktxn = function(tvb, pinfo, tree)
 
-    -- block_transactions_request
     local subtree = tree:add("block transactions request")
     local offset = 0
     subtree:add(fields.block_tx_request_block_hash, tvb(offset, 32))
@@ -601,6 +601,20 @@ msg_dissectors.getblocktxn = function(tvb, pinfo, tree)
         local len, n = dissect_var_int(tvb(offset), subtree)
         offset = offset + len
     end
+end
+
+msg_dissectors.blocktxn = function(tvb, pinfo, tree)
+
+    local subtree = tree:add("block transactions")
+    local offset = 0
+    subtree:add(fields.block_txs_block_hash, tvb(offset, 32))
+    offset = offset + 32
+    local len, n = dissect_var_int(tvb(offset), subtree)
+    offset = offset + len
+    for i = 1, n do
+        offset = offset + dissect_tx(tvb(offset), pinfo, subtree, 0, 0)
+    end
+
 end
 
 msg_dissectors.createstrm = function(tvb, pinfo, tree)
