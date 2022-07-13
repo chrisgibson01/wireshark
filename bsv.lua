@@ -487,12 +487,10 @@ function dissect_script(tvb, tree)
     return len + n
 end
 
-function dissect_coinbase_data(tvb, pinfo, tree)
+function dissect_coinbase_data(tvb, pinfo, tree, block_version)
     local subtree = tree:add('Coinbase Data')
     
     local len, n = dissect_var_int(tvb(offset), subtree)
-
-    -- BIP-34 specifies block height in block.version >= 2
     local offset = len 
     subtree:add(fields.tx_script_opcode, tvb(offset, 1)) 
     local opcode = tvb(offset, 1):uint()
@@ -500,10 +498,13 @@ function dissect_coinbase_data(tvb, pinfo, tree)
     assert(opcode >=1)
     offset = offset + 1
 
-    local block_height = tvb(offset, opcode):le_int()
-    update_info_col(pinfo, tostring(block_height))
-    subtree:add_le(fields.tx_in_block_height, tvb(offset, opcode)) 
-    offset = offset + opcode
+    -- BIP-34 specifies block height in block.version >= 2
+    if block_version >= 2 then 
+        local block_height = tvb(offset, opcode):le_int()
+        update_info_col(pinfo, tostring(block_height))
+        subtree:add_le(fields.tx_in_block_height, tvb(offset, opcode)) 
+        offset = offset + opcode
+    end
 
 -- cjg
 --    while offset < n do
@@ -525,11 +526,8 @@ function dissect_tx_in(tvb, pinfo, tree, block_version, iTx, iInput)
     local subtree = tree:add('Input ' .. iInput)
     local offset = dissect_out_point(tvb(0, 36), subtree)
     
-    local is_coinbase_tx = block_version >= 2 and 
-                           block_version ~= 0x20000000 and 
-                           iTx == 0 
-    if is_coinbase_tx and iInput == 0 then
-        offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree) 
+    if iTx == 0 and iInput == 0 then
+        offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree, block_version) 
     else
         offset = offset + dissect_unlocking_script(tvb(offset), pinfo, subtree)
     end
@@ -555,9 +553,8 @@ function dissect_tx(tvb, pinfo, tree, block_version, iTx)
     local len, n = dissect_var_int(tvb(4), tree)
     offset = offset + len
 
-
-    for i=0, n-1 do 
-        offset = offset + dissect_tx_in(tvb(offset), pinfo, tree, block_version, iTx, i) 
+    for iInput=0, n-1 do 
+        offset = offset + dissect_tx_in(tvb(offset), pinfo, tree, block_version, iTx, iInput) 
     end
 
     len, n = dissect_var_int(tvb(offset), tree)
