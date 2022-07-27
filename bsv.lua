@@ -301,6 +301,13 @@ fields.createstrm_stream_policy = ProtoField.string("bsv.createstrm.policy", "As
 fields.hdrsen_no_more_headers = ProtoField.bytes("bsv.hdrsen.no_more_headers", "no_more_headers")
 fields.hdrsen_has_coinbase_data = ProtoField.bytes("bsv.hdrsen.has_coinbase_data", "has_coinbase_data")
 
+fields.revoke_mid_version = ProtoField.uint32("bsv.revoke_mid.version", "Version")
+fields.revoke_mid_rev_key = ProtoField.bytes("bsv.revoke_mid.rev_key", "Revocation Key")
+fields.revoke_mid_miner_id = ProtoField.bytes("bsv.revoke_mid.miner_id", "Miner ID.")
+fields.revoke_mid_rev_msg = ProtoField.bytes("bsv.revoke_mid.rev_msg", "Revocation Message")
+fields.revoke_mid_sig_1 = ProtoField.bytes("bsv.revoke_mid.sig_1", "Sig 1")
+fields.revoke_mid_sig_2 = ProtoField.bytes("bsv.revoke_mid.sig_2", "Sig 2")
+
 msg_dissectors = {}
 
 bsv_protocol.fields = fields
@@ -494,7 +501,7 @@ function dissect_coinbase_data(tvb, pinfo, tree, block_version)
     local offset = len 
     subtree:add(fields.tx_script_opcode, tvb(offset, 1)) 
     local opcode = tvb(offset, 1):uint()
-    assert(opcode <=75)
+    assert(opcode <=76)
     assert(opcode >=1)
     offset = offset + 1
 
@@ -970,6 +977,38 @@ msg_dissectors.dsdetected = function (tvb, pinfo, tree)
         len = dissect_block_details(tvb(offset), subtree)        
         offset = offset + len
     end
+end
+
+msg_dissectors.revokemid = function (tvb, pinfo, tree)
+    
+    local offset = 0
+
+    tree:add_le(fields.revoke_mid_version, tvb(offset, 4))
+    offset = 4
+
+    tree:add(fields.revoke_mid_rev_key, tvb(offset, 33))
+    offset = offset + 33
+    
+    tree:add(fields.revoke_mid_miner_id, tvb(offset, 33))
+    offset = offset + 33
+    
+    tree:add(fields.revoke_mid_rev_msg, tvb(offset, 33))
+    offset = offset + 33
+
+    local len, n = dissect_var_int(tvb(offset), tree)
+    offset = offset + len
+    
+    len, n = dissect_var_int(tvb(offset), tree)
+    offset = offset + len
+    
+    tree:add(fields.revoke_mid_sig_1, tvb(offset, n))
+    offset = offset + n 
+    
+    len, n = dissect_var_int(tvb(offset), tree)
+    offset = offset + len
+    
+    tree:add(fields.revoke_mid_sig_2, tvb(offset, n))
+    offset = offset + n 
 end
 
 msg_dissectors.unknown = function(cmd, pinfo)
