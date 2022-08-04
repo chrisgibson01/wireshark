@@ -162,7 +162,8 @@ local inv_type =
     [1] = 'tx',
     [2] = 'block',
     [3] = 'filtered block',
-    [4] = 'cmpct block'
+    [4] = 'cmpct block',
+    [5] = 'dataref tx'
 }
 
 local fields = {}
@@ -586,6 +587,17 @@ msg_dissectors.tx = function(tvb, pinfo, tree)
     dissect_tx(tvb, pinfo, subtree, block_version, iTx)
 end
 
+msg_dissectors.datareftx = function (tvb, pinfo, tree)
+    
+    local subtree = tree:add('DataRefTx')
+    local block_version = 0
+    local iTx = 1
+    
+    local tx_subtree = subtree:add('Tx')
+    local offset = dissect_tx(tvb, pinfo, tx_subtree, block_version, iTx)
+    dissect_merkle_proof2(tvb(offset), subtree)
+end
+
 function dissect_target(tvb, tree)
     local length = tvb:len()
     assert(length == 4)
@@ -699,12 +711,11 @@ function dissect_header(tvb, pinfo, tree)
     return cmd
 end
 
-msg_dissectors.inv = function (tvb, pinfo, tree)
-
+function dissect_inv_vectors(tvb, pinfo, tree)
+    
     local subtree = tree:add("Inventory Vectors")
-
+    
     local len, n = dissect_var_int(tvb, subtree) 
-
     local offset = len
     for i=0, n-1 do 
         subtree:add_le(fields.inv_type, tvb(offset, 4))
@@ -712,18 +723,20 @@ msg_dissectors.inv = function (tvb, pinfo, tree)
         subtree:add(fields.inv_hash, tvb(offset, 32))
         offset = offset + 32
     end
+
+    return offset
+end
+
+msg_dissectors.inv = function (tvb, pinfo, tree)
+    dissect_inv_vectors(tvb, pinfo, tree)
 end
 
 msg_dissectors.getdata = function (tvb, pinfo, tree)
-    
-    local len, n = dissect_var_int(tvb, tree)
-    local offset = len 
-    local subtree = tree:add("Inventory Vectors")
-    for i=0, n-1 do 
-        subtree:add_le(fields.inv_type, tvb(offset, 4))
-        subtree:add(fields.hash, tvb(offset+4, 32))
-        offset = offset + 36
-    end
+    dissect_inv_vectors(tvb, pinfo, tree)
+end
+
+msg_dissectors.notfound = function (tvb, pinfo, tree)
+    dissect_inv_vectors(tvb, pinfo, tree)
 end
 
 function dissect_getheaders_impl(tvb, pinfo, tree)
@@ -981,33 +994,35 @@ end
 
 msg_dissectors.revokemid = function (tvb, pinfo, tree)
     
+    local subtree = tree:add('RevokeMID')
+
     local offset = 0
 
-    tree:add_le(fields.revoke_mid_version, tvb(offset, 4))
+    subtree:add_le(fields.revoke_mid_version, tvb(offset, 4))
     offset = 4
 
-    tree:add(fields.revoke_mid_rev_key, tvb(offset, 33))
+    subtree:add(fields.revoke_mid_rev_key, tvb(offset, 33))
     offset = offset + 33
     
-    tree:add(fields.revoke_mid_miner_id, tvb(offset, 33))
+    subtree:add(fields.revoke_mid_miner_id, tvb(offset, 33))
     offset = offset + 33
     
-    tree:add(fields.revoke_mid_rev_msg, tvb(offset, 33))
-    offset = offset + 33
+    subtree:add(fields.revoke_mid_rev_msg, tvb(offset, 34))
+    offset = offset + 3
 
-    local len, n = dissect_var_int(tvb(offset), tree)
+    local len, n = dissect_var_int(tvb(offset), subtree)
     offset = offset + len
     
-    len, n = dissect_var_int(tvb(offset), tree)
+    len, n = dissect_var_int(tvb(offset), subtree)
     offset = offset + len
     
-    tree:add(fields.revoke_mid_sig_1, tvb(offset, n))
+    subtree:add(fields.revoke_mid_sig_1, tvb(offset, n))
     offset = offset + n 
     
-    len, n = dissect_var_int(tvb(offset), tree)
+    len, n = dissect_var_int(tvb(offset), subtree)
     offset = offset + len
     
-    tree:add(fields.revoke_mid_sig_2, tvb(offset, n))
+    subtree:add(fields.revoke_mid_sig_2, tvb(offset, n))
     offset = offset + n 
 end
 
