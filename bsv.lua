@@ -2,12 +2,12 @@
 
 bsv_protocol = Proto("BSV",  "Bitcoin SV Protocol")
 
-local opcode = 
+local opcode =
 {
     -- push value,
     [0x0] = 'OP_0',
     [0x0] = 'OP_FALSE',
-    
+
     [0x4c] = 'OP_PUSHDATA1',
     [0x4d] = 'OP_PUSHDATA2',
     [0x4e] = 'OP_PUSHDATA4',
@@ -251,10 +251,11 @@ fields.block_timestamp = ProtoField.absolute_time("bsv.block.timestamp", "Timest
 fields.block_target_exponent = ProtoField.uint8("bsv.block.target.exponent", "Exponent", base.HEX)
 fields.block_target_mantissa = ProtoField.uint24("bsv.block.target.mantissa", "Mantissa", base.HEX)
 fields.block_nonce = ProtoField.uint32("bsv.block.nonce", "Nonce")
+fields.block_txn_count = ProtoField.uint8("bsv.block.txn_count", "Tx Count")
 
 fields.addr_timestamp = ProtoField.absolute_time("bsv.addr.timestamp", "Timestamp")
 
-fields.tx_version = ProtoField.int32("bsv.tx_version", "Version")
+fields.tx_version = ProtoField.uint32("bsv.tx_version", "Version", base.HEX)
 
 fields.version_version = ProtoField.int32("bsv.version.version", "Version")
 fields.version_services = ProtoField.bytes("bsv.version.services", "Services")
@@ -299,8 +300,9 @@ local stream_type =
 fields.createstrm_stream_type = ProtoField.uint8("bsv.createstrm.assoc_id", "Assoc. stream type", base.HEX, stream_type)
 fields.createstrm_stream_policy = ProtoField.string("bsv.createstrm.policy", "Assoc. stream policy")
 
-fields.hdrsen_no_more_headers = ProtoField.bytes("bsv.hdrsen.no_more_headers", "no_more_headers")
-fields.hdrsen_has_coinbase_data = ProtoField.bytes("bsv.hdrsen.has_coinbase_data", "has_coinbase_data")
+fields.hdrsen_no_more_headers = ProtoField.bytes("bsv.hdrsen.no_more_headers", "no more headers")
+fields.hdrsen_has_coinbase_data = ProtoField.bytes("bsv.hdrsen.has_coinbase_data", "has coinbase data")
+fields.hdrsen_has_miner_info_data = ProtoField.bytes("bsv.hdrsen.has_miner_info_data", "has miner info data")
 
 fields.revoke_mid_version = ProtoField.uint32("bsv.revoke_mid.version", "Version")
 fields.revoke_mid_rev_key = ProtoField.bytes("bsv.revoke_mid.rev_key", "Revocation Key")
@@ -315,22 +317,22 @@ bsv_protocol.fields = fields
 
 local min_header_len = 24
 
-function var_int(tvb)
+local function var_int(tvb)
     local n = tvb(0, 1):uint()
     if n < 0xfd then
         return 1, n
-    elseif n == 0xfd then 
+    elseif n == 0xfd then
         return 3, tvb(1, 2):le_uint()
-    elseif n == 0xfe then 
+    elseif n == 0xfe then
         return 5, tvb(1, 4):le_uint()
-    elseif n == 0xff then 
+    elseif n == 0xff then
         return 9, tvb(1, 8):le_uint64()
     else
         assert(false)
     end
 end
 
-function dissect_var_int(tvb, tree) -- cjg rename, adds a var_int to a tree
+local function dissect_var_int(tvb, tree) -- cjg rename, adds a var_int to a tree
     local len, n = var_int(tvb)
     if len == 1 then
         tree:add(fields.var_int1, tvb(0, len))
@@ -342,19 +344,19 @@ function dissect_var_int(tvb, tree) -- cjg rename, adds a var_int to a tree
         tree:add_le(fields.var_int8, tvb(1, len-1))
     else
         assert(false)
-    end    
-    return len, n 
+    end
+    return len, n
 end
 
-function update_info_col(pinfo, msg)
+local function update_info_col(pinfo, msg)
     pinfo.cols.info:append(' ' .. msg)
 end
 
-function dissect_network_addr(tvb, pinfo, tree)
+local function dissect_network_addr(tvb, pinfo, tree)
     local subtree = tree:add('Network Address')
     subtree:add(fields.network_address_services, tvb(0, 8))
     subtree:add(fields.network_address_ip, tvb(8, 16))
-    subtree:add(fields.network_address_port, tvb(24, 2)) 
+    subtree:add(fields.network_address_port, tvb(24, 2))
 end
 
 msg_dissectors.version = function(tvb, pinfo, tree)
@@ -362,32 +364,32 @@ msg_dissectors.version = function(tvb, pinfo, tree)
     subtree:add_le(fields.version_version, tvb(0, 4))
     subtree:add(fields.version_services, tvb(4, 8))
     subtree:add_le(fields.version_timestamp, tvb(12, 8))
-    
+
     dissect_network_addr(tvb(20), pinfo, subtree)
     dissect_network_addr(tvb(46), pinfo, subtree)
-    
+
     subtree:add(fields.version_nonce, tvb(72, 8))
-    
+
     local len, n  = var_int(tvb(80))
     local user_agent_start = 80+len
     subtree:add(fields.version_user_agent, tvb(user_agent_start, n))
     subtree:add_le(fields.version_block_height, tvb(user_agent_start+n, 4))
     subtree:add(fields.version_relay, tvb(user_agent_start+n+4, 1))
 end
-    
+
 msg_dissectors.addr = function(tvb, pinfo, tree)
     local subtree = tree:add('addr')
-    
+
     local len, n = dissect_var_int(tvb, subtree)
     local start = len 
     for i=0, n-1 do 
         subtree:add_le(fields.addr_timestamp, tvb(start, 4))
-        dissect_network_addr(tvb(start + 4, 26), pinfo, subtree) 
+        dissect_network_addr(tvb(start + 4, 26), pinfo, subtree)
         start = start + 30
     end
 end
 
-function dissect_out_point(tvb, tree) 
+local function dissect_out_point(tvb, tree)
     local subtree = tree:add('OutPoint')
     subtree:add(fields.txid, tvb(0, 32))
     subtree:add_le(fields.out_point_index, tvb(32, 4))
@@ -395,7 +397,7 @@ function dissect_out_point(tvb, tree)
 end
 
 -- see BIP_0062
-function dissect_digital_signature(tvb, tree)
+local function dissect_digital_signature(tvb, tree)
     local subtree = tree:add('Digital Signature')
     local der_tree = subtree:add('Distinguished Encoding Rules (DER)')
     local offset = 0
@@ -408,29 +410,29 @@ function dissect_digital_signature(tvb, tree)
     local len = tvb(offset, 1):uint()
     der_tree:add(fields.tx_script_der_len, tvb(offset, 1))
     offset = offset + 1
-    der_tree:add(fields.tx_script_der_r, tvb(offset, len)) 
+    der_tree:add(fields.tx_script_der_r, tvb(offset, len))
     offset = offset + len
     der_tree:add(fields.tx_script_der_type, tvb(offset, 1))
     offset = offset + 1
     len = tvb(offset, 1):uint()
     der_tree:add(fields.tx_script_der_len, tvb(offset, 1))
     offset = offset + 1
-    der_tree:add(fields.tx_script_der_s, tvb(offset, len)) 
+    der_tree:add(fields.tx_script_der_s, tvb(offset, len))
     offset = offset + len
 
-    subtree:add(fields.tx_script_sighash, tvb(offset, 1)) 
+    subtree:add(fields.tx_script_sighash, tvb(offset, 1))
 end
 
-function dissect_public_key(tvb, tree) 
-    assert(tvb:len() == 0x21) 
+local function dissect_public_key(tvb, tree)
+    assert(tvb:len() == 0x21)
     local subtree = tree:add('Public Key')
-    subtree:add(fields.tx_script_public_key, tvb) 
+    subtree:add(fields.tx_script_public_key, tvb)
 end
 
-function dissect_public_key_hash(tvb, tree)
+local function dissect_public_key_hash(tvb, tree)
     assert(tvb:len() == 0x14)
     local subtree = tree:add('Public Key Hash')
-    subtree:add(fields.tx_script_public_key_hash, tvb) 
+    subtree:add(fields.tx_script_public_key_hash, tvb)
 end
 
 function dissect_data(tvb, tree)
@@ -439,79 +441,79 @@ function dissect_data(tvb, tree)
 
     if len < 20 then
         tree:add(fields.tx_script_data, tvb) -- cjg
-    elseif len == 20 then 
+    elseif len == 20 then
         dissect_public_key_hash(tvb, tree)
     elseif len == 33 then --cjg
         dissect_public_key(tvb, tree)
     elseif len <= 72 and start == 0x30 then -- assume digital signature see BIP_0062
-        dissect_digital_signature(tvb, tree) 
+        dissect_digital_signature(tvb, tree)
     else
         tree:add(fields.tx_script_data, tvb) -- cjg public key hash
     end
 end
 
-function dissect_data2(tvb, tree)
-    local len = tvb:len()
+local function dissect_data2(tvb, tree)
     tree:add(fields.tx_script_data, tvb)
 end
 
-function dissect_script(tvb, tree)
+local function dissect_script(tvb, tree)
     local len, n = dissect_var_int(tvb, tree)
     local offset = len
-    while offset < len + n do 
+    while offset < len + n do
 
         local opcode = tvb(offset, 1):uint()
         if opcode <= 75 and opcode >= 1 then
-            tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
-            offset = offset + 1  
-            dissect_data(tvb(offset, opcode), tree) 
+            tree:add(fields.tx_script_opcode, tvb(offset, 1))
+            offset = offset + 1
+            dissect_data(tvb(offset, opcode), tree)
             offset = offset + opcode
         elseif opcode == 0x4c then -- 0x4c == OP_PUSHDATA1
-            tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
-            offset = offset + 1  
+            tree:add(fields.tx_script_opcode, tvb(offset, 1))
+            offset = offset + 1
             local len = tvb(offset, 1):uint()
-            tree:add(fields.tx_script_data_len, tvb(offset, 1)) 
-            offset = offset + 1  
-            dissect_data(tvb(offset, len), tree) 
+            tree:add(fields.tx_script_data_len, tvb(offset, 1))
+            offset = offset + 1
+            dissect_data(tvb(offset, len), tree)
             offset = offset + len
         elseif opcode == 0x4d then
-            tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
-            offset = offset + 1  
+            tree:add(fields.tx_script_opcode, tvb(offset, 1))
+            offset = offset + 1
             local len = tvb(offset, 2):uint()
             offset = offset + len
         elseif opcode == 0x4e then
-            tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
-            offset = offset + 1  
+            tree:add(fields.tx_script_opcode, tvb(offset, 1))
+            offset = offset + 1
             local len = tvb(offset, 4):uint()
             offset = offset + len
         elseif opcode == 0x6a then -- 0x6a == OP_RETURN
             dissect_data2(tvb(offset), tree)
             break
         else
-            tree:add(fields.tx_script_opcode, tvb(offset, 1)) 
+            tree:add(fields.tx_script_opcode, tvb(offset, 1))
             offset = offset + 1
         end
     end
     return len + n
 end
 
-function dissect_coinbase_data(tvb, pinfo, tree, block_version)
+local function dissect_coinbase_data(tvb, pinfo, tree, block_version)
     local subtree = tree:add('Coinbase Data')
-    
+
+    local offset = 0
     local len, n = dissect_var_int(tvb(offset), subtree)
-    local offset = len 
-    subtree:add(fields.tx_script_opcode, tvb(offset, 1)) 
-    local opcode = tvb(offset, 1):uint()
-    assert(opcode <=76)
-    assert(opcode >=1)
-    offset = offset + 1
+    offset = offset + len
+    --subtree:add(fields.tx_script_opcode, tvb(offset, 1)) 
+    --local opcode = tvb(offset, 1):uint()
+    --assert(opcode <=76)
+    --assert(opcode >=1)
+    --offset = offset + 1
 
     -- BIP-34 specifies block height in block.version >= 2
-    if block_version >= 2 then 
-        local block_height = tvb(offset, opcode):le_int()
+    if block_version >= 2 then
+        local block_height = tvb(offset, n):le_int()
         update_info_col(pinfo, tostring(block_height))
-        subtree:add_le(fields.tx_in_block_height, tvb(offset, opcode)) 
-        offset = offset + opcode
+        subtree:add_le(fields.tx_in_block_height, tvb(offset, n))
+        offset = offset + n
     end
 
 -- cjg
@@ -521,30 +523,30 @@ function dissect_coinbase_data(tvb, pinfo, tree, block_version)
 --        subtree:add(fields.tx_in_extra_nonce, tvb(offset,  extra_nonce_len))
 --        offset = offset + extra_nonce_len
 --    end
-    
+
     return len + n
 end
 
-function dissect_unlocking_script(tvb, pinfo, tree)
+local function dissect_unlocking_script(tvb, tree)
     local subtree = tree:add('Unlocking Script/scriptSig/witness')
     return dissect_script(tvb, subtree)
 end
 
-function dissect_tx_in(tvb, pinfo, tree, block_version, iTx, iInput) 
+local function dissect_tx_in(tvb, pinfo, tree, block_version, iTx, iInput)
     local subtree = tree:add('Input ' .. iInput)
     local offset = dissect_out_point(tvb(0, 36), subtree)
-    
-    if iTx == 0 and iInput == 0 then
-        offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree, block_version) 
+
+    if iTx == 1 and iInput == 0 then
+        offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree, block_version)
     else
-        offset = offset + dissect_unlocking_script(tvb(offset), pinfo, subtree)
+        offset = offset + dissect_unlocking_script(tvb(offset), subtree)
     end
 
     subtree:add(fields.tx_in_sequence, tvb(offset, 4))
-    return offset + 4 
+    return offset + 4
 end
-    
-function dissect_tx_out(tvb, tree, index) 
+
+local function dissect_tx_out(tvb, tree, index)
     local subtree = tree:add('Output ' .. index)
 
     subtree:add_le(fields.tx_out_value, tvb(0, 8))
@@ -555,14 +557,14 @@ function dissect_tx_out(tvb, tree, index)
     return 8 + n
 end
 
-function dissect_tx(tvb, pinfo, tree, block_version, iTx)
+local function dissect_tx(tvb, pinfo, tree, block_version, iTx)
     tree:add_le(fields.tx_version, tvb(0, 4))
     local offset = 4
     local len, n = dissect_var_int(tvb(4), tree)
     offset = offset + len
 
-    for iInput=0, n-1 do 
-        offset = offset + dissect_tx_in(tvb(offset), pinfo, tree, block_version, iTx, iInput) 
+    for iInput=0, n-1 do
+        offset = offset + dissect_tx_in(tvb(offset), pinfo, tree, block_version, iTx, iInput)
     end
 
     len, n = dissect_var_int(tvb(offset), tree)
@@ -583,22 +585,22 @@ end
 msg_dissectors.tx = function(tvb, pinfo, tree)
     local subtree = tree:add('Tx')
     local block_version = 0
-    local iTx = 0
+    local iTx = 42 -- assume not coinbase tx
     dissect_tx(tvb, pinfo, subtree, block_version, iTx)
 end
 
 msg_dissectors.datareftx = function (tvb, pinfo, tree)
-    
+
     local subtree = tree:add('DataRefTx')
     local block_version = 0
     local iTx = 1
-    
+
     local tx_subtree = subtree:add('Tx')
     local offset = dissect_tx(tvb, pinfo, tx_subtree, block_version, iTx)
     dissect_merkle_proof2(tvb(offset), subtree)
 end
 
-function dissect_target(tvb, tree)
+local function dissect_target(tvb, tree)
     local length = tvb:len()
     assert(length == 4)
     local subtree = tree:add("target")
@@ -606,16 +608,29 @@ function dissect_target(tvb, tree)
     subtree:add(fields.block_target_exponent, tvb(3, 1))
 end
 
-function dissect_block_header(tvb, tree)
+local function dissect_block_header(tvb, tree)
     local subtree = tree:add("block header")
-    subtree:add_le(fields.block_version, tvb(0, 4))
-    local block_version = tvb(0, 4):le_int()
-    subtree:add(fields.block_prev_block, tvb(4, 32))
-    subtree:add(fields.block_merkle_root, tvb(36, 32))
-    subtree:add_le(fields.block_timestamp, tvb(68, 4))
-    dissect_target(tvb(72, 4), subtree)
-    subtree:add_le(fields.block_nonce, tvb(76, 4))
-    return 80, block_version
+
+    local offset = 0
+    subtree:add_le(fields.block_version, tvb(offset, 4))
+    local block_version = tvb(offset, 4):le_int()
+    offset = offset + 4
+    subtree:add(fields.block_prev_block, tvb(offset, 32))
+    offset = offset + 32
+    subtree:add(fields.block_merkle_root, tvb(offset, 32))
+    offset = offset + 32
+    subtree:add_le(fields.block_timestamp, tvb(offset, 4))
+    offset = offset + 4
+    dissect_target(tvb(offset, 4), subtree)
+    offset = offset + 4
+    subtree:add_le(fields.block_nonce, tvb(offset, 4))
+    offset = offset + 4
+
+    if tvb:len() > 80 then
+        subtree:add_le(fields.block_txn_count, tvb(80, 1))
+        offset = offset + 1
+    end
+    return offset, block_version
 end
 
 msg_dissectors.getblocktxn = function(tvb, pinfo, tree)
@@ -672,52 +687,52 @@ end
 msg_dissectors.block = function(tvb, pinfo, tree)
     local block_tree = tree:add("block")
 
-    local _, block_version = dissect_block_header(tvb(0, 80), block_tree)
-    local len, tx_count = dissect_var_int(tvb(80), block_tree) 
-    local tx_start = 80 + len 
+    local offset, block_version = dissect_block_header(tvb(0), block_tree)
+    local len, tx_count = dissect_var_int(tvb(offset), block_tree)
+    offset = offset + len
     for iTx = 0, tx_count-1 do
         local tx_tree = block_tree:add('Tx ' .. iTx)
-        tx_start = tx_start + dissect_tx(tvb(tx_start), 
-                                         pinfo, 
-                                         tx_tree, 
+        offset = offset + dissect_tx(tvb(offset),
+                                         pinfo,
+                                         tx_tree,
                                          block_version,
-                                         iTx) 
+                                         iTx)
     end
 end
 
-function is_ext_header(tvb)
-    return tvb(16, 4):le_uint() == 0xffffffff 
+local function is_ext_header(tvb)
+    return tvb(16, 4):le_uint() == 0xffffffff
 end
 
-function dissect_header(tvb, pinfo, tree)
+local function dissect_header(tvb, pinfo, tree)
     local length = tvb:len()
     assert(length >= min_header_len)
-    
+
     local subtree = tree:add("Header")
     subtree:add(fields.magic, tvb(0, 4))
     subtree:add(fields.cmd, tvb(4, 12))
     subtree:add_le(fields.length, tvb(16, 4))
     subtree:add(fields.checksum, tvb(20, 4))
 
-    local cmd = tvb:range(4, 12):stringz() 
+    local cmd = tvb:range(4, 12):stringz()
 
     if is_ext_header(tvb) then
         subtree:add(fields.ext_cmd, tvb(24, 12))
         subtree:add_le(fields.ext_length, tvb(36, 8))
         cmd = tvb:range(24, 12):stringz() .. ' (Ext. Msg.)'
     end
-    
+
     update_info_col(pinfo, cmd)
     return cmd
 end
 
-function dissect_inv_vectors(tvb, pinfo, tree)
-    
+local function dissect_inv_vectors(tvb, pinfo, tree)
+
     local subtree = tree:add("Inventory Vectors")
-    
-    local len, n = dissect_var_int(tvb, subtree) 
+
+    local len, n = dissect_var_int(tvb, subtree)
     local offset = len
-    for i=0, n-1 do 
+    for i=0, n-1 do
         subtree:add_le(fields.inv_type, tvb(offset, 4))
         offset = offset + 4
         subtree:add(fields.inv_hash, tvb(offset, 32))
@@ -739,85 +754,96 @@ msg_dissectors.notfound = function (tvb, pinfo, tree)
     dissect_inv_vectors(tvb, pinfo, tree)
 end
 
-function dissect_getheaders_impl(tvb, pinfo, tree)
-    tree:add_le(fields.getheaders_version, tvb(0, 4)) 
-    
+local function dissect_getheaders_impl(tvb, pinfo, tree)
+    tree:add_le(fields.getheaders_version, tvb(0, 4))
+
     local len, n  = dissect_var_int(tvb(4), tree)
     local offset = 4 + len
     for i=0, n-1 do
         tree:add(fields.hash, tvb(offset, 32))
         offset = offset + 32
     end
-    
+
     -- hash stop 
     tree:add(fields.hash, tvb(offset, 32))
 end
 
-msg_dissectors.getheaders = function(tvb, pinfo, tree) 
+msg_dissectors.getheaders = function(tvb, pinfo, tree)
 
     local subtree = tree:add("getheaders")
     dissect_getheaders_impl(tvb, pinfo, subtree)
 end
 
-msg_dissectors.gethdrsen = function(tvb, pinfo, tree) 
+msg_dissectors.gethdrsen = function(tvb, pinfo, tree)
 
     local subtree = tree:add("gethdrsen")
     dissect_getheaders_impl(tvb, pinfo, subtree)
 end
 
-msg_dissectors.headers = function(tvb, pinfo, tree) 
-    
+msg_dissectors.headers = function(tvb, pinfo, tree)
+
     local subtree = tree:add("Block Headers")
     local len, n = dissect_var_int(tvb, subtree)
     local offset = len
     for i=0, n-1 do
         local blockTree = subtree:add('Block Header: ' .. i)
         offset = offset + dissect_block_header(tvb(offset), blockTree)
-        offset = offset + dissect_var_int(tvb(offset), blockTree)
     end
     return offset
 end
 
-msg_dissectors.hdrsen = function(tvb, pinfo, tree) 
+msg_dissectors.hdrsen = function(tvb, pinfo, tree)
 
-    local subtree = tree:add("Enhanced Block Headers")
+    local subtree = tree:add("Enriched Block Headers")
     local len, n = dissect_var_int(tvb, subtree)
     local offset = len
     for i=0, n-1 do
-        local blockTree = subtree:add('Enhanced Block Header: ' .. i)
+        local blockTree = subtree:add('Enriched Block Header: ' .. i)
         offset = offset + dissect_block_header(tvb(offset), blockTree)
-        offset = offset + dissect_var_int(tvb(offset), blockTree)
-    
-        blockTree:add(fields.hdrsen_no_more_headers, tvb(offset, 1)) 
+        --offset = offset + dissect_var_int(tvb(offset), blockTree)
+
+        blockTree:add(fields.hdrsen_no_more_headers, tvb(offset, 1))
         offset = offset + 1
-        blockTree:add(fields.hdrsen_has_coinbase_data, tvb(offset, 1)) 
+        blockTree:add(fields.hdrsen_has_coinbase_data, tvb(offset, 1))
         local has_coinbase_data = tvb(offset, 1):uint()
         offset = offset + 1
-       
-        if has_coinbase_data ~= 0 then
-            offset = offset + dissect_merkle_proof2(tvb(offset), blockTree)
 
-            local block_version = 0
-            local iTx = 0
+        if has_coinbase_data ~= 0 then
+            local block_version = 2
+            local iTx = 1
             local txTree = blockTree:add('Tx')
             offset = offset + dissect_tx(tvb(offset), pinfo, txTree, block_version, iTx)
+            offset = offset + dissect_merkle_proof2(tvb(offset), blockTree)
         end
+
+        blockTree:add(fields.hdrsen_has_miner_info_data, tvb(offset, 1))
+        local has_miner_info_data = tvb(offset, 1):uint()
+        offset = offset + 1
+
+        if has_miner_info_data ~= 0 then
+            local block_version = 2
+            local iTx = 1
+            local txTree = blockTree:add('Tx')
+            offset = offset + dissect_tx(tvb(offset), pinfo, txTree, block_version, iTx)
+            offset = offset + dissect_merkle_proof2(tvb(offset), blockTree)
+        end
+
     end
     return offset
 
 end
 
-msg_dissectors.ping = function(tvb, pinfo, tree) 
+msg_dissectors.ping = function(tvb, pinfo, tree)
     tree:add(fields.ping_nonce, tvb(0, 8))
 end
 
-msg_dissectors.pong = function(tvb, pinfo, tree) 
+msg_dissectors.pong = function(tvb, pinfo, tree)
     tree:add(fields.pong_nonce, tvb(0, 8))
 end
 
 msg_dissectors.protoconf = function (tvb, pinfo, tree)
 
-    len, n = dissect_var_int(tvb, tree)
+    local len, n = dissect_var_int(tvb, tree)
     -- cjg
     -- http://github.com/bitcoin-sv-specs/protocol/blob/master/p2p/protoconf.md
     -- len, n = dissect_var_int(tvb(len), tree)
@@ -829,7 +855,7 @@ msg_dissectors.sendcmpct = function (tvb, pinfo, tree)
     subtree:add_le(fields.sendcmpct_version, tvb(1, 8))
 end
 
-function dissect_prefilled_tx(tvb, pinfo, tree, block_version)
+local function dissect_prefilled_tx(tvb, pinfo, tree, block_version)
     local subtree = tree:add('Prefilled Tx')
     local len, n = dissect_var_int(tvb, subtree)
     local iTx = 0
@@ -840,21 +866,21 @@ msg_dissectors.cmpctblock = function (tvb, pinfo, tree)
     local subtree = tree:add("Compact Block")
     local hasi_tree = subtree:add("HeaderAndShortIDs")
 
-    local offset, block_version = dissect_block_header(tvb, hasi_tree)
+    local offset, block_version = dissect_block_header(tvb(0, 80), hasi_tree)
 
     hasi_tree:add_le(fields.hasids_nonce, tvb(offset, 8))
     offset = offset + 8
     local len, n = dissect_var_int(tvb(offset), hasi_tree)
     offset = offset + len
-    for i=0, n-1 do 
-       offset = offset + 6 
+    for i=0, n-1 do
+       offset = offset + 6
     end
 
     len, n = dissect_var_int(tvb(offset), hasi_tree)
     offset = offset + len
-    for i=0, n-1 do 
+    for i=0, n-1 do
        len = dissect_prefilled_tx(tvb(offset), pinfo, hasi_tree, block_version, 0)
-       offset = offset + len 
+       offset = offset + len
     end
 end
 
@@ -875,16 +901,16 @@ end
 function dissect_merkle_proof(tvb, tree)
     local subtree = tree:add('Merkle Proof')
     subtree:add(fields.dsdetected_mp_flags, tvb(0, 1))
-    
+
     local offset = 1
     local len, tx_index = var_int(tvb(offset))
     offset = offset + len
     subtree:add('Tx Index', tx_index)
-    
+
     local len2, tx_len = var_int(tvb(offset))
     offset = offset + len2
     subtree:add('Tx Length', tx_len)
-   
+
     subtree:add(fields.dsdetected_mp_tx, tvb(offset, tx_len))
     offset = offset + tx_len
     subtree:add(fields.dsdetected_mp_merkle_root, tvb(offset, 32))
@@ -906,14 +932,14 @@ end
 
 function dissect_merkle_proof2(tvb, tree)
     local subtree = tree:add('Merkle Proof')
-    
-    local offset = 0 
+
+    local offset = 0
     subtree:add(fields.dsdetected_mp_flags, tvb(offset, 1))
     local flags = tvb(offset, 1):le_uint()
     offset = offset + 1
 
     local len, n = dissect_var_int(tvb(offset), subtree) --index field
-    offset = offset + len 
+    offset = offset + len
 
     if flags == 0 then
         subtree:add(fields.merkle_proof_txid, tvb(offset, 32))
@@ -925,7 +951,7 @@ function dissect_merkle_proof2(tvb, tree)
         subtree:add(fields.merkle_proof_target, tvb(offset, 32))
         offset = offset + 32
     --end
-    
+
     local len3, node_count = var_int(tvb(offset))
     offset = offset + len3
     subtree:add('Node Count', node_count)
@@ -935,12 +961,11 @@ function dissect_merkle_proof2(tvb, tree)
         offset = offset + 1
         -- assume type 0 i.e. 32 byte value
         subtree:add(fields.dsdetected_mp_node_value, tvb(offset, 32))
-        offset = offset + 32 
+        offset = offset + 32
     end
     return offset
     --dissect_var_int(tvb(offset), subtree) 
 
-    
 --    local offset = 1
 --    local len, tx_index = var_int(tvb(offset))
 --    offset = offset + len
@@ -978,7 +1003,7 @@ function dissect_block_details(tvb, tree)
 end
 
 msg_dissectors.dsdetected = function (tvb, pinfo, tree)
-    
+
     tree:add_le(fields.dsdetected_version, tvb(0, 2))
     local offset = 2
 
@@ -987,13 +1012,13 @@ msg_dissectors.dsdetected = function (tvb, pinfo, tree)
 
     local subtree = tree:add('Block Details')
     for i=0, n-1 do
-        len = dissect_block_details(tvb(offset), subtree)        
+        len = dissect_block_details(tvb(offset), subtree)
         offset = offset + len
     end
 end
 
 msg_dissectors.revokemid = function (tvb, pinfo, tree)
-    
+
     local subtree = tree:add('RevokeMID')
 
     local offset = 0
@@ -1003,27 +1028,27 @@ msg_dissectors.revokemid = function (tvb, pinfo, tree)
 
     subtree:add(fields.revoke_mid_rev_key, tvb(offset, 33))
     offset = offset + 33
-    
+
     subtree:add(fields.revoke_mid_miner_id, tvb(offset, 33))
     offset = offset + 33
-    
+
     subtree:add(fields.revoke_mid_rev_msg, tvb(offset, 34))
     offset = offset + 3
 
     local len, n = dissect_var_int(tvb(offset), subtree)
     offset = offset + len
-    
+
     len, n = dissect_var_int(tvb(offset), subtree)
     offset = offset + len
-    
+
     subtree:add(fields.revoke_mid_sig_1, tvb(offset, n))
-    offset = offset + n 
-    
+    offset = offset + n
+
     len, n = dissect_var_int(tvb(offset), subtree)
     offset = offset + len
-    
+
     subtree:add(fields.revoke_mid_sig_2, tvb(offset, n))
-    offset = offset + n 
+    offset = offset + n
 end
 
 msg_dissectors.unknown = function(cmd, pinfo)
@@ -1032,7 +1057,7 @@ end
 
 function header_length(tvb)
     if is_ext_header(tvb) then
-        return 44        
+        return 44
     else
         return 24
     end
@@ -1062,32 +1087,32 @@ end
 
 -- returns number bytes dissected, msg length 
 function dissect_msg(tvb, pinfo, sv_tree)
-    
+
     local seg_len = tvb:len()
-    if seg_len >= 4 then 
+    if seg_len >= 4 then
         if not valid_magic_bytes(tvb) then
             update_info_col(pinfo, 'unrecognised magic bytes')
             return seg_len, 0 -- This is not a sv message
         end
     end
 
-    if seg_len < min_header_len then 
+    if seg_len < min_header_len then
         return 0, min_header_len
     end
 
     local header_len = header_length(tvb)
     if seg_len < header_len then
         return 0, header_length
-    end 
+    end
 
-    local body_len = body_length(tvb) 
+    local body_len = body_length(tvb)
     local msg_len = header_len + body_len
     if(msg_len > seg_len) then
-        return 0, msg_len 
+        return 0, msg_len
     end
 
     local msg_tree = sv_tree:add('msg')
-        
+
     local cmd = dissect_header(tvb, pinfo, msg_tree)
 
     if body_len > 0 then
@@ -1098,7 +1123,7 @@ function dissect_msg(tvb, pinfo, sv_tree)
             msg_dissectors.unknown(cmd, pinfo)
         end
     end
-    
+
     return msg_len, msg_len
 end
 
@@ -1107,7 +1132,7 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
 
     pinfo.cols.protocol = bsv_protocol.name
     pinfo.cols.info = ''
-    
+
     local subtree = tree:add(bsv_protocol, tvb(), "Bitcoin SV")
 
     --see https://wiki.wireshark.org/Lua/Dissectors
@@ -1118,7 +1143,7 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
         if msg_read == 0 then
             pinfo.desegment_len = offset + msg_len - seg_len 
             pinfo.desegment_offset = offset
-            return 
+            return
         end
     end
 end
