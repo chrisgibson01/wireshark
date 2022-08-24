@@ -643,7 +643,7 @@ msg_dissectors.getblocktxn = function(tvb, pinfo, tree)
     offset = offset + len
 
     for i = 1, n do
-        local len, n = dissect_var_int(tvb(offset), subtree)
+        len = dissect_var_int(tvb(offset), subtree)
         offset = offset + len
     end
 end
