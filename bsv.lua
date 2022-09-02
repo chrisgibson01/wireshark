@@ -311,6 +311,16 @@ fields.revoke_mid_rev_msg = ProtoField.bytes("bsv.revoke_mid.rev_msg", "Revocati
 fields.revoke_mid_sig_1 = ProtoField.bytes("bsv.revoke_mid.sig_1", "Sig 1")
 fields.revoke_mid_sig_2 = ProtoField.bytes("bsv.revoke_mid.sig_2", "Sig 2")
 
+fields.authch_version = ProtoField.int32("bsv.authch.version", "Version")
+fields.authch_msg_len = ProtoField.uint32("bsv.authch.msg_len", "Length")
+fields.authch_msg = ProtoField.bytes("bsv.authch.msg", "Message")
+
+fields.authresp_key_len = ProtoField.uint32("bsv.authresp.key_len", "Public Key Length")
+fields.authresp_key = ProtoField.bytes("bsv.authresp.key", "Public Key")
+fields.authresp_nonce = ProtoField.uint64("bsv.authresp.nonce", "Nonce")
+fields.authresp_sig_len = ProtoField.uint32("bsv.authresp.sig_len", "Signature Length")
+fields.authresp_sig = ProtoField.bytes("bsv.authresp.sig", "Signature")
+
 msg_dissectors = {}
 
 bsv_protocol.fields = fields
@@ -1049,6 +1059,40 @@ msg_dissectors.revokemid = function (tvb, pinfo, tree)
 
     subtree:add(fields.revoke_mid_sig_2, tvb(offset, n))
     offset = offset + n
+end
+
+msg_dissectors.authch = function (tvb, pinfo, tree)
+    local subtree = tree:add('AuthCh')
+
+    local offset = 0
+    subtree:add_le(fields.authch_version, tvb(offset, 4))
+    offset = offset + 4
+    subtree:add_le(fields.authch_msg_len, tvb(offset, 4))
+    local msg_len = tvb(offset, 4):le_uint()
+    offset = offset + 4
+    subtree:add(fields.authch_msg, tvb(offset, msg_len))
+    offset = offset + msg_len
+    return offset
+end
+
+msg_dissectors.authresp = function (tvb, pinfo, tree)
+    local subtree = tree:add('AuthResp')
+
+    local offset = 0
+    subtree:add_le(fields.authresp_key_len, tvb(offset, 4))
+    local key_len = tvb(offset, 4):le_uint()
+    offset = offset + 4
+    subtree:add_le(fields.authresp_key, tvb(offset, key_len))
+    offset = offset + key_len
+    subtree:add(fields.authresp_nonce, tvb(offset, 8))
+    offset = offset + 8
+    offset = offset + 1 -- bug here!?
+    subtree:add_le(fields.authresp_sig_len, tvb(offset, 4))
+    local sig_len = tvb(offset, 4):le_uint()
+    offset = offset + 4
+    subtree:add(fields.authresp_sig, tvb(offset, sig_len - 1)) -- same bug?
+    offset = offset + sig_len
+    return offset
 end
 
 msg_dissectors.unknown = function(cmd, pinfo)
