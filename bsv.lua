@@ -237,9 +237,9 @@ local sig_hash =
     [0xc2] = 'ANYONECANPAY | FORKID | NONE (this input, no outputs)',
     [0xc3] = 'ANYONECANPAY | FORKID | SINGLE (this input, this output)',
 }
-fields.tx_script_sighash = ProtoField.uint8("bsv.tx.script.sighash", 
+fields.tx_script_sighash = ProtoField.uint8("bsv.tx.script.sighash",
                                             "Signature Hash",
-                                            base.HEX, 
+                                            base.HEX,
                                             sig_hash)
 fields.tx_lock_time = ProtoField.absolute_time("bsv.tx_out.lock_time", "Lock Time")
 fields.tx_lock_block = ProtoField.uint32("bsv.tx_out.lock_block", "Lock Time Block")
@@ -283,7 +283,7 @@ fields.dsdetected_mp_tx = ProtoField.bytes("bsv.dsdetected.merkle_proof.tx", "Tx
 fields.dsdetected_mp_merkle_root = ProtoField.bytes("bsv.dsdetected.merkle_proof.merkle_root", "Merkle Root")
 fields.dsdetected_mp_node_type = ProtoField.uint8("bsv.dsdetected.merkle_proof.node.type", "Type")
 fields.dsdetected_mp_node_value = ProtoField.bytes("bsv.dsdetected.merkle_proof.node.value", "Value")
-   
+
 fields.merkle_proof_txid = ProtoField.bytes("bsv.mp.txid", "txid")
 fields.merkle_proof_target = ProtoField.bytes("bsv.mp.target", "target")
 
@@ -320,6 +320,26 @@ fields.authresp_key = ProtoField.bytes("bsv.authresp.key", "Public Key")
 fields.authresp_nonce = ProtoField.uint64("bsv.authresp.nonce", "Nonce")
 fields.authresp_sig_len = ProtoField.uint32("bsv.authresp.sig_len", "Signature Length")
 fields.authresp_sig = ProtoField.bytes("bsv.authresp.sig", "Signature")
+
+fields.reject_msg = ProtoField.string("bsv.reject.msg", "Message")
+local reject_code =
+{
+    [0x01] = "REJECT_MALFORMED",
+    [0x10] = "REJECT_INVALID",
+    [0x11] = "REJECT_OBSOLETE",
+    [0x12] = "REJECT_DUPLICATE",
+    [0x40] = "REJECT_NONSTANDARD",
+    [0x41] = "REJECT_DUST",
+    [0x42] = "REJECT_INSUFFICIENTFEE",
+    [0x43] = "REJECT_CHECKPOINT",
+    [0x44] = "REJECT_TOOBUSY",
+    [0x45] = "REJECT_RATE_EXCEEDED",
+    [0x60] = "REJECT_STREAM_SETUP",
+    [0x70] = "REJECT_AUTH_CONN_SETUP",
+}
+fields.reject_code = ProtoField.uint8("bsv.reject.ccode", "Ccode", base.HEX, reject_code)
+fields.reject_reason = ProtoField.string("bsv.reject.reason", "Reason")
+
 
 msg_dissectors = {}
 
@@ -391,8 +411,8 @@ msg_dissectors.addr = function(tvb, pinfo, tree)
     local subtree = tree:add('addr')
 
     local len, n = dissect_var_int(tvb, subtree)
-    local start = len 
-    for i=0, n-1 do 
+    local start = len
+    for i=0, n-1 do
         subtree:add_le(fields.addr_timestamp, tvb(start, 4))
         dissect_network_addr(tvb(start + 4, 26), pinfo, subtree)
         start = start + 30
@@ -935,7 +955,7 @@ function dissect_merkle_proof(tvb, tree)
         offset = offset + 1
         -- assume type 0 i.e. 32 byte value
         subtree:add(fields.dsdetected_mp_node_value, tvb(offset, 32))
-        offset = offset + 32 
+        offset = offset + 32
     end
     return offset
 end
@@ -1079,19 +1099,42 @@ msg_dissectors.authresp = function (tvb, pinfo, tree)
     local subtree = tree:add('AuthResp')
 
     local offset = 0
-    subtree:add_le(fields.authresp_key_len, tvb(offset, 4))
-    local key_len = tvb(offset, 4):le_uint()
-    offset = offset + 4
-    subtree:add_le(fields.authresp_key, tvb(offset, key_len))
-    offset = offset + key_len
+    local len, n = dissect_var_int(tvb, subtree)
+    offset = offset + len
+    subtree:add_le(fields.authresp_key, tvb(offset, n))
+    offset = offset + n
+
     subtree:add(fields.authresp_nonce, tvb(offset, 8))
     offset = offset + 8
-    offset = offset + 1 -- bug here!?
-    subtree:add_le(fields.authresp_sig_len, tvb(offset, 4))
-    local sig_len = tvb(offset, 4):le_uint()
-    offset = offset + 4
-    subtree:add(fields.authresp_sig, tvb(offset, sig_len - 1)) -- same bug?
-    offset = offset + sig_len
+
+    len, n = dissect_var_int(tvb(offset), subtree)
+    offset = offset + len
+    subtree:add(fields.authresp_sig, tvb(offset, n))
+    offset = offset + n
+    return offset
+end
+
+msg_dissectors.reject = function (tvb, pinfo, tree)
+    local subtree = tree:add('Reject')
+
+    local offset = 0
+    local len, n = dissect_var_int(tvb, subtree)
+    offset = offset + len
+
+    subtree:add(fields.reject_msg, tvb(offset, n))
+    offset = offset + n
+
+    subtree:add(fields.reject_code, tvb(offset, 1))
+    offset = offset + 1
+
+    len, n = dissect_var_int(tvb(offset), subtree)
+    offset = offset + len
+
+    subtree:add(fields.reject_reason, tvb(offset, n))
+    offset = offset + n
+
+    -- to do optional data
+
     return offset
 end
 
@@ -1185,7 +1228,7 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
         local msg_read, msg_len = dissect_msg(tvb(offset), pinfo, subtree)
         offset = offset + msg_read
         if msg_read == 0 then
-            pinfo.desegment_len = offset + msg_len - seg_len 
+            pinfo.desegment_len = offset + msg_len - seg_len
             pinfo.desegment_offset = offset
             return
         end
