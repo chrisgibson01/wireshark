@@ -1114,7 +1114,10 @@ msg_dissectors.authresp = function (tvb, pinfo, tree)
     return offset
 end
 
-msg_dissectors.reject = function (tvb, pinfo, tree)
+msg_dissectors.authack = function(tvb, pinfo, tree)
+end
+
+msg_dissectors.reject = function(tvb, pinfo, tree)
     local subtree = tree:add('Reject')
 
     local offset = 0
