@@ -686,8 +686,9 @@ msg_dissectors.blocktxn = function(tvb, pinfo, tree)
     offset = offset + 32
     local len, n = dissect_var_int(tvb(offset), subtree)
     offset = offset + len
-    for i = 1, n do
-        offset = offset + dissect_tx(tvb(offset), pinfo, subtree, 0, 0)
+    for i = 0, n-1 do
+        local tx_tree = subtree:add('Tx ' .. i)
+        offset = offset + dissect_tx(tvb(offset), pinfo, tx_tree, 0, 0)
     end
 
 end
