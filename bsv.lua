@@ -657,10 +657,11 @@ local function dissect_block_header(tvb, tree)
     offset = offset + 4
 
     if tvb:len() > 80 then
-        subtree:add_le(fields.block_txn_count, tvb(80, 1))
-        offset = offset + 1
+        local len, n = dissect_var_int(tvb(offset), subtree)
+        offset = offset + len
+        return offset, block_version, n
     end
-    return offset, block_version
+    return offset, block_version, 0
 end
 
 msg_dissectors.getblocktxn = function(tvb, pinfo, tree)
@@ -718,9 +719,8 @@ end
 msg_dissectors.block = function(tvb, pinfo, tree)
     local block_tree = tree:add("block")
 
-    local offset, block_version = dissect_block_header(tvb(0), block_tree)
-    local len, tx_count = dissect_var_int(tvb(offset), block_tree)
-    offset = offset + len
+    local offset, block_version, tx_count = dissect_block_header(tvb(0), block_tree)
+    offset = offset
     for iTx = 0, tx_count-1 do
         local tx_tree = block_tree:add('Tx ' .. iTx)
         offset = offset + dissect_tx(tvb(offset),
@@ -831,7 +831,6 @@ msg_dissectors.hdrsen = function(tvb, pinfo, tree)
     for i=0, n-1 do
         local blockTree = subtree:add('Enriched Block Header: ' .. i)
         offset = offset + dissect_block_header(tvb(offset), blockTree)
-        --offset = offset + dissect_var_int(tvb(offset), blockTree)
 
         blockTree:add(fields.hdrsen_no_more_headers, tvb(offset, 1))
         offset = offset + 1
