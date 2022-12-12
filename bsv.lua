@@ -242,7 +242,7 @@ fields.tx_script_sighash = ProtoField.uint8("bsv.tx.script.sighash",
                                             base.HEX,
                                             sig_hash)
 fields.tx_lock_time = ProtoField.absolute_time("bsv.tx_out.lock_time", "Lock Time")
-fields.tx_lock_block = ProtoField.uint32("bsv.tx_out.lock_block", "Lock Time Block")
+fields.tx_lock_block = ProtoField.uint32("bsv.tx_out.lock_block", "Lock Time (Block Height)")
 
 fields.block_version = ProtoField.uint32("bsv.block.version", "Version", base.HEX)
 fields.block_prev_block = ProtoField.bytes("bsv.block.pre_block", "Prev Block")
