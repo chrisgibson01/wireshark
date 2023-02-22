@@ -276,6 +276,7 @@ fields.sendcmpct_version = ProtoField.uint64("bsv.sendcmpct.version", "Version")
 fields.satoshis_per_kb = ProtoField.int64("bsv.feefilter", "Minimum Satoshis/kb")
 
 fields.hasids_nonce = ProtoField.uint64("bsv.header_and_short_ids.nonce", "Nonce")
+fields.hasids_short_id = ProtoField.bytes("bsv.header_and_short_ids.short_id", "Short Id")
 
 fields.dsdetected_version = ProtoField.uint16("bsv.dsdetected.version", "Version")
 fields.dsdetected_mp_flags = ProtoField.uint8("bsv.dsdetected.merkle_proof.flags", "Flags")
@@ -885,6 +886,11 @@ msg_dissectors.sendcmpct = function (tvb, pinfo, tree)
     subtree:add_le(fields.sendcmpct_version, tvb(1, 8))
 end
 
+local function dissect_short_ids(tvb, pinfo, tree)
+    tree:add(fields.hasids_short_id, tvb(0, 6))
+    return 6
+end
+
 local function dissect_prefilled_tx(tvb, pinfo, tree, block_version)
     local subtree = tree:add('Prefilled Tx')
     local len, n = dissect_var_int(tvb, subtree)
@@ -902,9 +908,15 @@ msg_dissectors.cmpctblock = function (tvb, pinfo, tree)
     offset = offset + 8
     local len, n = dissect_var_int(tvb(offset), hasi_tree)
     offset = offset + len
-    for i=0, n-1 do
-       offset = offset + 6
-    end
+    local short_ids_tree = hasi_tree:add('short ids')
+--    dissecting shortids individually takes too long for large n
+--    for i=0, n-1 do
+--        len = dissect_short_ids(tvb(offset), pinfo, short_ids_tree)
+--        offset = offset + len
+--    end
+--   Just add them all
+    short_ids_tree:add(fields.hasids_short_id, tvb(offset, 6 * n))
+    offset = offset + (6 * n)
 
     len, n = dissect_var_int(tvb(offset), hasi_tree)
     offset = offset + len
