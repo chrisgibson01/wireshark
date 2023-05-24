@@ -490,12 +490,17 @@ end
 local function dissect_script(tvb, tree)
     local len, n = dissect_var_int(tvb, tree)
     local offset = len
-    while offset < len + n do
 
+    while offset < len + n do
         local opcode = tvb(offset, 1):uint()
         if opcode <= 75 and opcode >= 1 then
             tree:add(fields.tx_script_opcode, tvb(offset, 1))
             offset = offset + 1
+
+            if offset + opcode > len + n then
+                break
+            end
+
             dissect_data(tvb(offset, opcode), tree)
             offset = offset + opcode
         elseif opcode == 0x4c then -- 0x4c == OP_PUSHDATA1
