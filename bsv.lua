@@ -589,9 +589,10 @@ local function dissect_tx_out(tvb, tree, index)
 end
 
 local function dissect_tx(tvb, pinfo, tree, block_version, iTx)
-    tree:add_le(fields.tx_version, tvb(0, 4))
-    local offset = 4
-    local len, n = dissect_var_int(tvb(4), tree)
+    local offset = 0
+    tree:add_le(fields.tx_version, tvb(offset, 4))
+    offset = offset + 4
+    local len, n = dissect_var_int(tvb(offset), tree)
     offset = offset + len
 
     for iInput=0, n-1 do
