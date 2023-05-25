@@ -466,7 +466,7 @@ local function dissect_public_key_hash(tvb, tree)
     subtree:add(fields.tx_script_public_key_hash, tvb)
 end
 
-function dissect_data(tvb, tree)
+local function dissect_data(tvb, tree)
     local len = tvb:len()
     local start = tvb(0, 1):uint()
 
@@ -483,21 +483,18 @@ function dissect_data(tvb, tree)
     end
 end
 
-local function dissect_data2(tvb, tree)
-    tree:add(fields.tx_script_data, tvb)
-end
-
 local function dissect_script(tvb, tree)
     local len, n = dissect_var_int(tvb, tree)
     local offset = len
 
-    while offset < len + n do
+    local total_len = len + n
+    while offset < total_len do
         local opcode = tvb(offset, 1):uint()
         if opcode <= 75 and opcode >= 1 then
             tree:add(fields.tx_script_opcode, tvb(offset, 1))
             offset = offset + 1
 
-            if offset + opcode > len + n then
+            if offset + opcode > total_len then
                 break
             end
 
@@ -522,14 +519,14 @@ local function dissect_script(tvb, tree)
             local len = tvb(offset, 4):uint()
             offset = offset + len
         elseif opcode == 0x6a then -- 0x6a == OP_RETURN
-            dissect_data2(tvb(offset), tree)
+            tree:add(fields.tx_script_data, tvb(offset, total_len - offset))
             break
         else
             tree:add(fields.tx_script_opcode, tvb(offset, 1))
             offset = offset + 1
         end
     end
-    return len + n
+    return total_len
 end
 
 local function dissect_coinbase_data(tvb, pinfo, tree, block_version)
@@ -537,20 +534,26 @@ local function dissect_coinbase_data(tvb, pinfo, tree, block_version)
 
     local offset = 0
     local len, n = dissect_var_int(tvb(offset), subtree)
+    local total_len = len + n
     offset = offset + len
-    --subtree:add(fields.tx_script_opcode, tvb(offset, 1)) 
+
+--    if offset + n >= tvb:len() then
+--        return len + n
+--    end
+
+    --subtree:add(fields.tx_script_opcode, tvb(offset, 1))
     --local opcode = tvb(offset, 1):uint()
     --assert(opcode <=76)
     --assert(opcode >=1)
     --offset = offset + 1
 
     -- BIP-34 specifies block height in block.version >= 2
-    if block_version >= 2 then
-        local block_height = tvb(offset, n):le_int()
-        update_info_col(pinfo, tostring(block_height))
-        subtree:add_le(fields.tx_in_block_height, tvb(offset, n))
-        offset = offset + n
-    end
+--    if block_version >= 2 then
+--        local block_height = tvb(offset, n):le_int()
+--        update_info_col(pinfo, tostring(block_height))
+--        subtree:add_le(fields.tx_in_block_height, tvb(offset, n))
+--        offset = offset + n
+--    end
 
 -- cjg
 --    while offset < n do
@@ -560,7 +563,7 @@ local function dissect_coinbase_data(tvb, pinfo, tree, block_version)
 --        offset = offset + extra_nonce_len
 --    end
 
-    return len + n
+    return total_len
 end
 
 local function dissect_unlocking_script(tvb, tree)
@@ -572,7 +575,7 @@ local function dissect_tx_in(tvb, pinfo, tree, block_version, iTx, iInput)
     local subtree = tree:add('Input ' .. iInput)
     local offset = dissect_out_point(tvb(0, 36), subtree)
 
-    if iTx == 1 and iInput == 0 then
+    if iTx == 0 and iInput == 0 then
         offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree, block_version)
     else
         offset = offset + dissect_unlocking_script(tvb(offset), subtree)
@@ -594,6 +597,9 @@ local function dissect_tx_out(tvb, tree, index)
 end
 
 local function dissect_tx(tvb, pinfo, tree, block_version, iTx)
+
+    print('dissect_tx' .. ' ' .. block_version .. ' ' .. iTx)
+
     local offset = 0
     tree:add_le(fields.tx_version, tvb(offset, 4))
     offset = offset + 4
