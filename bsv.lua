@@ -598,8 +598,6 @@ end
 
 local function dissect_tx(tvb, pinfo, tree, block_version, iTx)
 
-    print('dissect_tx' .. ' ' .. block_version .. ' ' .. iTx)
-
     local offset = 0
     tree:add_le(fields.tx_version, tvb(offset, 4))
     offset = offset + 4
@@ -943,7 +941,7 @@ msg_dissectors.feefilter = function (tvb, pinfo, tree)
     tree:add_le(fields.satoshis_per_kb, tvb(0, 8))
 end
 
-function dissect_header_list(tvb, tree)
+local function dissect_header_list(tvb, tree)
     local subtree = tree:add('Header List')
     local offset, n = dissect_var_int(tvb, subtree)
     for i=0, n-1 do
@@ -953,7 +951,7 @@ function dissect_header_list(tvb, tree)
     return offset
 end
 
-function dissect_merkle_proof(tvb, tree)
+local function dissect_merkle_proof(tvb, tree)
     local subtree = tree:add('Merkle Proof')
     subtree:add(fields.dsdetected_mp_flags, tvb(0, 1))
 
@@ -985,7 +983,7 @@ function dissect_merkle_proof(tvb, tree)
     return offset
 end
 
-function dissect_merkle_proof2(tvb, tree)
+local function dissect_merkle_proof2(tvb, tree)
     local subtree = tree:add('Merkle Proof')
 
     local offset = 0
@@ -1049,7 +1047,7 @@ function dissect_merkle_proof2(tvb, tree)
 --    return offset
 end
 
-function dissect_block_details(tvb, tree)
+local function dissect_block_details(tvb, tree)
     local subtree = tree:add('Block Detail')
     local offset = dissect_header_list(tvb, subtree)
     --return offset + dissect_merkle_proof(tvb(offset), subtree)
@@ -1170,7 +1168,7 @@ msg_dissectors.unknown = function(cmd, pinfo)
     update_info_col(pinfo, '*** dissector not yet implemented ***')
 end
 
-function header_length(tvb)
+local function header_length(tvb)
     if is_ext_header(tvb) then
         return 44
     else
@@ -1178,7 +1176,7 @@ function header_length(tvb)
     end
 end
 
-function body_length(tvb)
+local function body_length(tvb)
     if is_ext_header(tvb) then
         -- Wireshark doesn't seem to be able to handle >4gb application messages
         -- Therefore, just show the extended headers
@@ -1190,7 +1188,7 @@ function body_length(tvb)
 end
 
 -- pre-condition length(tvb) >= 4
-function valid_magic_bytes(tvb)
+local function valid_magic_bytes(tvb)
     local b = tvb(0, 4):uint()
     for k, v in pairs(magic) do
         if(b == k) then
@@ -1201,7 +1199,7 @@ function valid_magic_bytes(tvb)
 end
 
 -- returns number bytes dissected, msg length 
-function dissect_msg(tvb, pinfo, sv_tree)
+local function dissect_msg(tvb, pinfo, sv_tree)
 
     local seg_len = tvb:len()
     if seg_len >= 4 then
