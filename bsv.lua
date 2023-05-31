@@ -529,17 +529,17 @@ local function dissect_script(tvb, tree)
     return total_len
 end
 
-local function dissect_coinbase_data(tvb, pinfo, tree, block_version)
-    local subtree = tree:add('Coinbase Data')
+local function dissect_coinbase_script(tvb, pinfo, tree, block_version)
+    local subtree = tree:add('Coinbase Script')
 
     local offset = 0
     local len, n = dissect_var_int(tvb(offset), subtree)
     local total_len = len + n
     offset = offset + len
 
---    if offset + n >= tvb:len() then
---        return len + n
---    end
+    if tvb:len() < total_len then
+        return total_len
+    end
 
     --subtree:add(fields.tx_script_opcode, tvb(offset, 1))
     --local opcode = tvb(offset, 1):uint()
@@ -576,7 +576,7 @@ local function dissect_tx_in(tvb, pinfo, tree, block_version, iTx, iInput)
     local offset = dissect_out_point(tvb(0, 36), subtree)
 
     if iTx == 0 and iInput == 0 then
-        offset = offset + dissect_coinbase_data(tvb(offset), pinfo, subtree, block_version)
+        offset = offset + dissect_coinbase_script(tvb(offset), pinfo, subtree, block_version)
     else
         offset = offset + dissect_unlocking_script(tvb(offset), subtree)
     end
