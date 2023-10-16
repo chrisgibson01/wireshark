@@ -902,8 +902,7 @@ local function dissect_short_ids(tvb, pinfo, tree)
 end
 
 local function dissect_prefilled_tx(tvb, pinfo, tree, block_version)
-    local subtree = tree:add('PrefilledTxs')
-    local prefilledtx_tree = subtree:add('PrefilledTx')
+    local prefilledtx_tree = tree:add('PrefilledTx')
     local len, n = dissect_var_int(tvb, prefilledtx_tree)
     local iTx = 0
     local tx_tree = prefilledtx_tree:add('Tx')
@@ -930,10 +929,15 @@ msg_dissectors.cmpctblock = function (tvb, pinfo, tree)
     offset = offset + (6 * n)
 
     len, n = dissect_var_int(tvb(offset), hasi_tree)
+
+    local prefilled_txs_tree = hasi_tree:add('PrefilledTxs')
     offset = offset + len
     for i=0, n-1 do
-       len = dissect_prefilled_tx(tvb(offset), pinfo, hasi_tree, block_version)
-       offset = offset + len
+        len = dissect_prefilled_tx(tvb(offset),
+                                pinfo,
+                                prefilled_txs_tree,
+                                block_version)
+        offset = offset + len
     end
 end
 
