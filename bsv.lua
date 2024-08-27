@@ -341,6 +341,7 @@ local reject_code =
 fields.reject_code = ProtoField.uint8("bsv.reject.ccode", "Ccode", base.HEX, reject_code)
 fields.reject_reason = ProtoField.string("bsv.reject.reason", "Reason")
 
+fields.mempool = ProtoField.int64("bsv.mempool.age", "Age (seconds)")
 
 msg_dissectors = {}
 
@@ -1166,6 +1167,10 @@ msg_dissectors.reject = function(tvb, pinfo, tree)
     -- to do optional data
 
     return offset
+end
+
+msg_dissectors.mempool = function(tvb, info, tree)
+    tree:add_le(fields.mempool, tvb(0, 8))
 end
 
 msg_dissectors.unknown = function(cmd, pinfo)
