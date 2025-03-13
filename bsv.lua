@@ -264,6 +264,16 @@ fields.version_nonce = ProtoField.uint64("bsv.version.nonce", "Nonce")
 fields.version_user_agent = ProtoField.string("bsv.version.user_agent", "User Agent")
 fields.version_block_height = ProtoField.uint32("bsv.version.block_height", "Block Height")
 fields.version_relay = ProtoField.bool("bsv.version.relay", "Relay")
+local assoc_type =
+{
+    [0] = 'UUID',
+}
+fields.version_assoc_type = ProtoField.uint8("bsv.version.assoc_type",
+                                            "Association Type",
+                                            base.HEX,
+                                            assoc_type)
+
+fields.version_assoc_id = ProtoField.bytes("bsv.version.association_id", "AssociationId")
 
 fields.network_address_version = ProtoField.uint32("bsv.network_addr.version", "Version")
 fields.network_address_port = ProtoField.uint16("bsv.network_addr.port", "Port")
@@ -406,10 +416,20 @@ msg_dissectors.version = function(tvb, pinfo, tree)
     subtree:add(fields.version_nonce, tvb(72, 8))
 
     local len, n  = var_int(tvb(80))
-    local user_agent_start = 80+len
-    subtree:add(fields.version_user_agent, tvb(user_agent_start, n))
-    subtree:add_le(fields.version_block_height, tvb(user_agent_start+n, 4))
-    subtree:add(fields.version_relay, tvb(user_agent_start+n+4, 1))
+    local offset = 80 + len
+    subtree:add(fields.version_user_agent, tvb(offset, n))
+    offset = offset + n
+    subtree:add_le(fields.version_block_height, tvb(offset, 4))
+    offset = offset + 4
+    subtree:add(fields.version_relay, tvb(offset, 1))
+    offset = offset + 1
+
+    len, n = dissect_var_int(tvb(offset), subtree)
+    offset = offset + len
+
+    subtree:add(fields.version_assoc_type, tvb(offset, 1))
+    offset = offset + 1
+    subtree:add(fields.version_assoc_id, tvb(offset, 16))
 end
 
 msg_dissectors.addr = function(tvb, pinfo, tree)
