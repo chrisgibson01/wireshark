@@ -343,6 +343,9 @@ fields.reject_reason = ProtoField.string("bsv.reject.reason", "Reason")
 
 fields.mempool = ProtoField.int64("bsv.mempool.age", "Age (seconds)")
 
+fields.protoconf_maxRecvPayloadLength = ProtoField.uint32("bsv.protoconf.maxRecvPayloadLength", "MaxRecvPayloadLength")
+fields.protoconf_stream_policies = ProtoField.string("bsv.protoconf.stream_policies", "Stream Policies")
+
 msg_dissectors = {}
 
 bsv_protocol.fields = fields
@@ -884,11 +887,17 @@ msg_dissectors.pong = function(tvb, pinfo, tree)
 end
 
 msg_dissectors.protoconf = function (tvb, pinfo, tree)
-
-    local len, n = dissect_var_int(tvb, tree)
-    -- cjg
     -- http://github.com/bitcoin-sv-specs/protocol/blob/master/p2p/protoconf.md
-    -- len, n = dissect_var_int(tvb(len), tree)
+
+    local subtree = tree:add("protoconf")
+
+    local len = dissect_var_int(tvb, subtree)
+    local offset = len
+    subtree:add_le(fields.protoconf_maxRecvPayloadLength, tvb(offset, 4))
+    offset = offset + 4
+    len  = dissect_var_int(tvb(offset), subtree)
+    offset = offset + len
+    subtree:add(fields.protoconf_stream_policies, tvb(offset))
 end
 
 msg_dissectors.sendcmpct = function (tvb, pinfo, tree)
