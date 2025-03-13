@@ -1,6 +1,6 @@
 --dbg = require('debug')
 
-bsv_protocol = Proto("BSV",  "Bitcoin SV Protocol")
+bsv_protocol = Proto("bsv",  "Bitcoin SV Protocol")
 
 local opcode =
 {
