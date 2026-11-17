@@ -280,6 +280,22 @@ fields.network_address_port = ProtoField.uint16("bsv.network_addr.port", "Port")
 fields.network_address_services = ProtoField.bytes("bsv.network_addr.services", "Services")
 fields.network_address_ip = ProtoField.ipv6("bsv.network_addr.ip", "IP Address")
 
+local service_flags = {
+    {"network", "NODE_NETWORK", 0x0001},
+    {"getutxo", "NODE_GETUTXO", 0x0002},
+    {"bloom", "NODE_BLOOM", 0x0004},
+    {"xthin", "NODE_XTHIN", 0x0010},
+    {"bitcoin_cash", "NODE_BITCOIN_CASH", 0x0020},
+    {"network_limited", "NODE_NETWORK_LIMITED", 0x0400},
+}
+for _, flag in ipairs(service_flags) do
+    fields["services_" .. flag[1]] = ProtoField.bool("bsv.services." .. flag[1],
+                                                     flag[2],
+                                                     16,
+                                                     nil,
+                                                     flag[3])
+end
+
 fields.sendcmpct_on = ProtoField.uint8("bsv.sendcmpct.on", "High Bandwidth Relaying")
 fields.sendcmpct_version = ProtoField.uint64("bsv.sendcmpct.version", "Version")
 
@@ -397,9 +413,25 @@ local function update_info_col(pinfo, msg)
     pinfo.cols.info:append(' ' .. msg)
 end
 
+-- All defined service bits are in the low 16 bits of the little-endian uint64
+local function dissect_services(tvb, tree, field)
+    local item = tree:add(field, tvb(0, 8))
+    local bits = tvb(0, 2):le_uint()
+    local names = {}
+    for _, flag in ipairs(service_flags) do
+        item:add_le(fields["services_" .. flag[1]], tvb(0, 2))
+        if math.floor(bits / flag[3]) % 2 == 1 then
+            names[#names + 1] = flag[2]
+        end
+    end
+    if #names > 0 then
+        item:append_text(" (" .. table.concat(names, " | ") .. ")")
+    end
+end
+
 local function dissect_network_addr(tvb, pinfo, tree)
     local subtree = tree:add('Network Address')
-    subtree:add(fields.network_address_services, tvb(0, 8))
+    dissect_services(tvb(0, 8), subtree, fields.network_address_services)
     subtree:add(fields.network_address_ip, tvb(8, 16))
     subtree:add(fields.network_address_port, tvb(24, 2))
 end
@@ -407,7 +439,7 @@ end
 msg_dissectors.version = function(tvb, pinfo, tree)
     local subtree = tree:add('Version')
     subtree:add_le(fields.version_version, tvb(0, 4))
-    subtree:add(fields.version_services, tvb(4, 8))
+    dissect_services(tvb(4, 8), subtree, fields.version_services)
     subtree:add_le(fields.version_timestamp, tvb(12, 8))
 
     dissect_network_addr(tvb(20), pinfo, subtree)
