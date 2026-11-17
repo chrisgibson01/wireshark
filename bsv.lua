@@ -371,7 +371,7 @@ local function var_int(tvb)
     elseif n == 0xfe then
         return 5, tvb(1, 4):le_uint()
     elseif n == 0xff then
-        return 9, tvb(1, 8):le_uint64()
+        return 9, tvb(1, 8):le_uint64():tonumber()
     else
         assert(false)
     end
