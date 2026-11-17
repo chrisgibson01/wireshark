@@ -1255,7 +1255,7 @@ local function dissect_msg(tvb, pinfo, sv_tree)
 
     local header_len = header_length(tvb)
     if seg_len < header_len then
-        return 0, header_length
+        return 0, header_len
     end
 
     local body_len = body_length(tvb)
