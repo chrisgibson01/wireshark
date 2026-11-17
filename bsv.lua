@@ -425,11 +425,13 @@ msg_dissectors.version = function(tvb, pinfo, tree)
     offset = offset + 1
 
     len, n = dissect_var_int(tvb(offset), subtree)
-    offset = offset + len
+    if n > 0 then
+        offset = offset + len
 
-    subtree:add(fields.version_assoc_type, tvb(offset, 1))
-    offset = offset + 1
-    subtree:add(fields.version_assoc_id, tvb(offset, 16))
+        subtree:add(fields.version_assoc_type, tvb(offset, 1))
+        offset = offset + 1
+        subtree:add(fields.version_assoc_id, tvb(offset, 16))
+    end
 end
 
 msg_dissectors.addr = function(tvb, pinfo, tree)
