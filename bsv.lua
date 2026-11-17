@@ -456,13 +456,16 @@ msg_dissectors.version = function(tvb, pinfo, tree)
     subtree:add(fields.version_relay, tvb(offset, 1))
     offset = offset + 1
 
-    len, n = dissect_var_int(tvb(offset), subtree)
-    if n > 0 then
-        offset = offset + len
+    -- the association id is optional
+    if offset < tvb:len() then
+        len, n = dissect_var_int(tvb(offset), subtree)
+        if n > 0 then
+            offset = offset + len
 
-        subtree:add(fields.version_assoc_type, tvb(offset, 1))
-        offset = offset + 1
-        subtree:add(fields.version_assoc_id, tvb(offset, 16))
+            subtree:add(fields.version_assoc_type, tvb(offset, 1))
+            offset = offset + 1
+            subtree:add(fields.version_assoc_id, tvb(offset, 16))
+        end
     end
 end
 
