@@ -842,6 +842,12 @@ msg_dissectors.getheaders = function(tvb, pinfo, tree)
     dissect_getheaders_impl(tvb, pinfo, subtree)
 end
 
+msg_dissectors.getblocks = function(tvb, pinfo, tree)
+
+    local subtree = tree:add("getblocks")
+    dissect_getheaders_impl(tvb, pinfo, subtree)
+end
+
 msg_dissectors.gethdrsen = function(tvb, pinfo, tree)
 
     local subtree = tree:add("gethdrsen")
