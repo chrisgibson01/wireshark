@@ -1271,7 +1271,7 @@ local function dissect_msg(tvb, pinfo, sv_tree)
     if body_len > 0 then
         local cmd_dissector = msg_dissectors[cmd]
         if cmd_dissector ~= nil then
-            cmd_dissector(tvb(header_len), pinfo, msg_tree)
+            cmd_dissector(tvb(header_len, body_len), pinfo, msg_tree)
         else
             msg_dissectors.unknown(cmd, pinfo)
         end
