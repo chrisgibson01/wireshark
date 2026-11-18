@@ -1324,6 +1324,11 @@ end
 function bsv_protocol.dissector(tvb, pinfo, tree)
     local seg_len = tvb:len()
 
+    -- Reject packets that don't start with BSV magic so other dissectors can try
+    if seg_len >= 4 and not valid_magic_bytes(tvb) then
+        return 0
+    end
+
     pinfo.cols.protocol = bsv_protocol.name
     pinfo.cols.info = ''
 
@@ -1337,9 +1342,10 @@ function bsv_protocol.dissector(tvb, pinfo, tree)
         if msg_read == 0 then
             pinfo.desegment_len = offset + msg_len - seg_len
             pinfo.desegment_offset = offset
-            return
+            return seg_len
         end
     end
+    return seg_len
 end
 
 local tcp_port_dissector = DissectorTable.get("tcp.port")
